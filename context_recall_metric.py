@@ -4,7 +4,7 @@ from ragas.metrics import LLMContextPrecisionWithoutReference, LLMContextRecall
 from utils import get_api_response, read_test_data
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("get_test_data",[read_test_data()],indirect=True)
+@pytest.mark.parametrize("get_test_data",[read_test_data("rag_test_data.json")],indirect=True)
 async def test_context_recall(llm_wrapper,get_test_data):
     context_recall = LLMContextRecall(llm=llm_wrapper)
     # Generate score

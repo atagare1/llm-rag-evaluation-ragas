@@ -9,7 +9,7 @@ from ragas.metrics import LLMContextPrecisionWithoutReference
 from utils import read_test_data, get_api_response
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("get_test_data",[read_test_data()],indirect=True)
+@pytest.mark.parametrize("get_test_data",[read_test_data("rag_test_data.json")],indirect=True)
 async def test_context_precision(llm_wrapper,get_test_data):
     # Use Together AI endpoint and key
     context_precision = LLMContextPrecisionWithoutReference(llm=llm_wrapper)
@@ -27,8 +27,9 @@ def get_test_data(request):
     sample= SingleTurnSample(
         user_input=passed_data["question"],
         response=responseData["answer"],
-        retrieved_contexts=[responseData["retrieved_docs"][0]["page_content"],
-                            responseData["retrieved_docs"][1]["page_content"],]
+        retrieved_contexts=[ doc["page_content"] for doc in responseData.get("retrieved_docs")]
+        #retrieved_contexts=[responseData["retrieved_docs"][0]["page_content"],
+           #                 responseData["retrieved_docs"][1]["page_content"],]
 
     )
     return sample
