@@ -1,121 +1,76 @@
-# 🤖 LLM RAG Evaluation using RAGAS + Together AI
+# LLM RAG Evaluation using RAGAS + Together AI
 
-This project demonstrates an evaluation pipeline for **Retrieval-Augmented Generation (RAG)** using the [RAGAS](https://github.com/explodinggradients/ragas) framework, with inference powered by **open-source LLMs hosted on [Together AI](https://www.together.ai/)**.
+This project is a **pytest-based RAG evaluation POC**. It scores answers from an external RAG demo API with [RAGAS](https://github.com/explodinggradients/ragas), using an open-source judge model hosted on [Together AI](https://www.together.ai/) through the OpenAI-compatible client.
 
----
-
-## 🚀 Key Features
-
-* 🔍 Evaluate RAG pipelines using **RAGAS**
-* 💸 Switch from expensive GPT APIs to **Together AI** (e.g., `Mixtral`, `LLaMA`, `Zephyr`)
-* 🧪 Simplified `pytest`-based test setup using `conftest.py`
-* 🔁 Easy model switching via environment variables
+This is not an enterprise evaluation framework. Thresholds below are **experimental POC gates** and are **not production-validated**.
 
 ---
 
-## 📦 Installation
+## What is implemented
 
-1. **Clone the repository**
+* RAGAS metrics: context precision (without reference), context recall, faithfulness, response relevancy, factual correctness
+* Together AI via `OPENAI_API_KEY` + `OPENAI_BASE_URL`
+* pytest collection of `test_*.py`
+* Shared mapping from the live RAG response (`answer`, `retrieved_docs[].page_content`)
+* Optional env configuration for model, RAG URL, and thresholds (defaults preserve the original POC)
+
+---
+
+## Installation
 
 ```bash
 git clone https://github.com/atagare1/llm-rag-evaluation-ragas.git
 cd llm-rag-evaluation-ragas
-```
-
-2. **Create and activate a virtual environment**
-
-```bash
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
-```
-
-3. **Install dependencies**
-
-```bash
 pip install -r requirements.txt
 ```
 
 ---
 
-## 🔐 Secure API Setup
+## Configuration
 
-Create a `.env` file in the root directory:
+Copy `.env.example` to `.env` and replace placeholders. Do not commit `.env`.
 
 ```env
 OPENAI_API_KEY=your_together_ai_key
 OPENAI_BASE_URL=https://api.together.xyz/v1
 ```
 
-Ensure `.env` is **ignored** in version control:
+Optional (defaults shown):
 
-```gitignore
-.env
+```env
+RAG_API_URL=https://rahulshettyacademy.com/rag-llm/ask
+RAGAS_LLM_MODEL=mistralai/Mixtral-8x7B-Instruct-v0.1
+RAGAS_EMBEDDING_MODEL=intfloat/multilingual-e5-large-instruct
 ```
+
+Live RAGAS tests skip when `OPENAI_API_KEY` is unset. Unit tests do not call Together or the RAG API.
 
 ---
 
-## ⚙️ Test Configuration with Together AI (`conftest.py`)
-
-We use a `pytest` fixture to load the LLM from Together AI. It uses environment variables to remain secure and flexible.
-
-### `conftest.py`
-
-```python
-import os
-import pytest
-from langchain.chat_models import ChatOpenAI
-from dotenv import load_dotenv
-
-load_dotenv()  # Load .env at runtime
-
-@pytest.fixture
-def llm_wrapper():
-    """
-    LLM fixture using Together AI-hosted open models.
-    """
-    llm = ChatOpenAI(
-        model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-        temperature=0.7
-    )
-    return llm
-```
-
----
-
-## ✅ Sample Test
-
-```python
-def test_llm_response(llm_wrapper):
-    response = llm_wrapper.predict("What is RAG?")
-    assert isinstance(response, str)
-    assert "retrieval" in response.lower()
-```
-
-Run with:
+## Running tests
 
 ```bash
 pytest
 ```
 
----
+* Unit tests: dataset loading, response mapping, configuration (no live services).
+* Live tests: require Together credentials and the external RAG API.
 
-## 🆖 Why Together AI Over OpenAI (ChatGPT)?
-
-| Feature            | Together AI                                | OpenAI (ChatGPT)                    |
-| ------------------ | ------------------------------------------ | ----------------------------------- |
-| 💸 Cost            | Free & affordable OSS models               | Expensive for GPT-4 & large volumes |
-| 🔄 Model Switching | Supports OSS models (Mixtral, LLaMA, etc.) | Proprietary only (GPT-3.5, GPT-4)   |
-| 🚀 Performance     | Fast, scalable inference                   | Limited based on pricing tier       |
-| 🧠 Transparency    | Open weights & training specs              | Black-box models                    |
+Experimental default gates: context precision `> 0.8`, context recall `> 0.7`, faithfulness `> 0.8`, answer relevancy `> 0.8`, factual correctness `> 0.8`. Override with `RAGAS_THRESHOLD_*` env vars if needed.
 
 ---
 
-## 📊 Future Enhancements
+## Why Together AI
 
-* Integrate RAGAS metrics into test reports
-* Utilise RAGAS dashboard
-* Add benchmarking across multiple models (e.g., `Mixtral` vs `LLaMA`)
-* Plug into CI/CD with GitHub Actions
+Together AI is used here as an OpenAI-compatible host for open models such as Mixtral. Model choice is `RAGAS_LLM_MODEL`. This POC does not include multi-model benchmarking.
 
+---
 
+## Future work (not implemented)
 
+* Evaluation reports and dashboards
+* Multi-model benchmarking
+* Regression / drift detection
+* CI/CD quality gates
