@@ -1,0 +1,78 @@
+"""PV-E1: one live RAGAS faithfulness result through the real EvaluationRunner.
+
+Reuses the Llama smoke judge and Phase 1 faithfulness test data.
+The policy is the existing experimental faithfulness threshold.
+It is not a new production quality bar.
+"""
+
+import math
+
+import pytest
+from langchain_openai import ChatOpenAI
+from ragas.llms import LangchainLLMWrapper
+
+from ai_qe_eval.domain.config import EvaluationConfig
+from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
+from ai_qe_eval.domain.trace import EvaluationTrace
+from ai_qe_eval.evaluators.ragas import RAGASFaithfulnessEvaluator
+from ai_qe_eval.gate.quality_gate import QualityGate
+from ai_qe_eval.policy.quality_policy import QualityPolicy
+from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
+from utils import metric_threshold, read_test_data
+
+SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+
+
+@pytest.mark.live
+@pytest.mark.parametrize(
+    "get_test_data",
+    [read_test_data("rag_test_data_faithfulness.json")],
+    indirect=True,
+)
+def test_pv_e1_ragas_faithfulness_through_runner(get_test_data):
+    sample = get_test_data
+    trace = EvaluationTrace(
+        trace_id="pv-e1",
+        scenario_type="rag",
+        input=sample.user_input,
+        output=sample.response,
+        expected=sample.reference,
+        retrieval=list(sample.retrieved_contexts or []),
+    )
+    llm = ChatOpenAI(model=SMOKE_JUDGE_MODEL, temperature=0)
+    wrapper = LangchainLLMWrapper(llm)
+    registry = EvaluationRegistry()
+    registry.register(
+        EvaluationCapability(
+            name="faithfulness",
+            evaluator="ragas",
+            category="rag",
+        )
+    )
+    runner = EvaluationRunner(
+        registry=registry,
+        evaluators={"faithfulness": RAGASFaithfulnessEvaluator(llm=wrapper)},
+        policies={
+            "faithfulness": QualityPolicy(
+                metric="faithfulness",
+                operator=">=",
+                threshold=metric_threshold("faithfulness"),
+            )
+        },
+        gate=QualityGate(),
+    )
+    config = EvaluationConfig(evaluations=["faithfulness"])
+    print("provider_model", SMOKE_JUDGE_MODEL)
+
+    decision = runner.run(trace, config)
+
+    assert decision.passed is True
+    assert runner.last_run is not None
+    assert runner.last_run.gate_decision is decision
+    assert len(runner.last_run.results) == 1
+    result = runner.last_run.results[0]
+    assert result.metric == "faithfulness"
+    assert result.evaluator == "ragas"
+    assert isinstance(result.score, (int, float)) and not isinstance(result.score, bool)
+    assert math.isfinite(result.score)
+    print("faithfulness_score", result.score)

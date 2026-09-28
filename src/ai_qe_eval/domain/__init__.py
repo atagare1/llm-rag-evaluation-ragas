@@ -1,4 +1,5 @@
 from ai_qe_eval.domain.config import EvaluationConfig
+from ai_qe_eval.domain.conversation import ConversationTurn, ToolInvocation
 from ai_qe_eval.domain.evaluator import Evaluator
 from ai_qe_eval.domain.events import EVENT_TYPE_KEY, TraceEvent, make_trace_event
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
@@ -8,6 +9,7 @@ from ai_qe_eval.domain.trace import EvaluationTrace
 
 __all__ = [
     "EVENT_TYPE_KEY",
+    "ConversationTurn",
     "EvaluationCapability",
     "EvaluationConfig",
     "EvaluationRegistry",
@@ -16,6 +18,7 @@ __all__ = [
     "TraceEvaluation",
     "EvaluationTrace",
     "Evaluator",
+    "ToolInvocation",
     "TraceEvent",
     "make_trace_event",
 ]

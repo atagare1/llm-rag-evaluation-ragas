@@ -8,13 +8,26 @@ Downstream Phase 2 packages are not created here.
 """
 
 from ai_qe_eval.domain.config import EvaluationConfig
+from ai_qe_eval.domain.conversation import ConversationTurn, ToolInvocation
 from ai_qe_eval.domain.evaluator import Evaluator
 from ai_qe_eval.domain.events import EVENT_TYPE_KEY, TraceEvent, make_trace_event
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
 from ai_qe_eval.domain.result import EvaluationResult
 from ai_qe_eval.domain.run import EvaluationRun, TraceEvaluation
 from ai_qe_eval.domain.trace import EvaluationTrace
-from ai_qe_eval.evaluators.deepeval import DeepEvalGEvalCorrectnessEvaluator
+from ai_qe_eval.evaluators.deepeval import (
+    DeepEvalAnswerRelevancyEvaluator,
+    DeepEvalContextualPrecisionEvaluator,
+    DeepEvalContextualRecallEvaluator,
+    DeepEvalContextualRelevancyEvaluator,
+    DeepEvalFaithfulnessEvaluator,
+    DeepEvalHallucinationEvaluator,
+    DeepEvalGEvalCorrectnessEvaluator,
+)
+from ai_qe_eval.evaluators.deepeval_tool_correctness import (
+    DeepEvalToolCorrectnessEvaluator,
+)
+from ai_qe_eval.evaluators.deepeval_turn_relevancy import DeepEvalTurnRelevancyEvaluator
 from ai_qe_eval.evaluators.deterministic import DeterministicEvaluator
 from ai_qe_eval.evaluators.ragas import RAGASFaithfulnessEvaluator
 from ai_qe_eval.normalization.result_normalizer import normalize, normalize_many
@@ -23,7 +36,16 @@ from ai_qe_eval.policy.quality_policy import PolicyDecision, QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
 __all__ = [
+    "ConversationTurn",
+    "DeepEvalAnswerRelevancyEvaluator",
+    "DeepEvalContextualPrecisionEvaluator",
+    "DeepEvalContextualRecallEvaluator",
+    "DeepEvalContextualRelevancyEvaluator",
+    "DeepEvalFaithfulnessEvaluator",
+    "DeepEvalHallucinationEvaluator",
     "DeepEvalGEvalCorrectnessEvaluator",
+    "DeepEvalToolCorrectnessEvaluator",
+    "DeepEvalTurnRelevancyEvaluator",
     "DeterministicEvaluator",
     "EVENT_TYPE_KEY",
     "RAGASFaithfulnessEvaluator",
@@ -42,6 +64,7 @@ __all__ = [
     "PolicyDecision",
     "QualityGate",
     "QualityPolicy",
+    "ToolInvocation",
     "TraceEvent",
     "make_trace_event",
 ]

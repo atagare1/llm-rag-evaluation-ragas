@@ -1,0 +1,54 @@
+"""Live DeepEval Contextual Precision smoke.
+
+Uses the same Together LocalModel as the other DeepEval smokes. Calls
+DeepEvalContextualPrecisionEvaluator directly. Does not apply a quality threshold.
+"""
+
+import math
+import os
+
+import pytest
+from deepeval.models.llms.local_model import LocalModel
+
+from ai_qe_eval.domain.trace import EvaluationTrace
+from ai_qe_eval.evaluators.deepeval import DeepEvalContextualPrecisionEvaluator
+
+SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+
+
+@pytest.mark.live
+def test_pv_f_deepeval_contextual_precision_smoke_returns_numeric_score():
+    api_key = os.getenv("OPENAI_API_KEY")
+    base_url = os.getenv("OPENAI_BASE_URL")
+    if not api_key or not base_url:
+        pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
+
+    trace = EvaluationTrace(
+        trace_id="pv-f-contextual-precision",
+        scenario_type="rag",
+        input="What is 2 + 2?",
+        output="4",
+        expected="4",
+        retrieval=["2 + 2 = 4"],
+    )
+    model = LocalModel(
+        model=SMOKE_JUDGE_MODEL,
+        api_key=api_key,
+        base_url=base_url,
+        temperature=0,
+    )
+    print("provider_model", SMOKE_JUDGE_MODEL)
+
+    results = DeepEvalContextualPrecisionEvaluator(model=model).evaluate(trace)
+
+    assert len(results) == 1
+    result = results[0]
+    assert result.metric == "contextual_precision"
+    assert result.evaluator == "deepeval"
+    assert isinstance(result.score, (int, float)) and not isinstance(result.score, bool)
+    assert math.isfinite(result.score)
+    assert 0.0 <= result.score <= 1.0
+    assert result.reason is not None
+    assert isinstance(result.reason, str) and result.reason.strip() != ""
+    print("contextual_precision_score", result.score)
+    print("contextual_precision_reason", result.reason)
