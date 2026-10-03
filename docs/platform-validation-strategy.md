@@ -33,14 +33,14 @@ Do **not** treat stub tests as live provider proof. Do **not** treat Phase 1 liv
 ### 2.1 Execution path (actual)
 
 ```text
-EvaluationTrace + EvaluationConfig
+request map + EvaluationConfig
         ↓
 EvaluationRunner.run | run_many
         ↓
 EvaluationRegistry.get(capability name)
         + injected Evaluator instance
         ↓
-Evaluator.evaluate(trace) → EvaluationResult[]
+Evaluator.evaluate(*args, **kwargs) → EvaluationResult[]
         ↓
 normalize_many
         ↓

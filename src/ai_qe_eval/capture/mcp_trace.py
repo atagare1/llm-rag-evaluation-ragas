@@ -1,8 +1,8 @@
 """Deterministic MCP observation capture.
 
-Converts plain observed tool data into ToolInvocation values and builds an
-EvaluationTrace for an MCP scenario. Does not execute MCP transports, evaluate
-metrics, or apply quality gates.
+Converts plain observed tool data into ToolInvocation values and Design A
+request maps. Does not execute MCP transports, evaluate metrics, or apply
+quality gates.
 
 Does not import the MCP SDK or DeepEval.
 """
@@ -12,10 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from ai_qe_eval.domain.conversation import ConversationTurn, ToolInvocation
-from ai_qe_eval.domain.trace import EvaluationTrace
-
-MCP_SCENARIO_TYPE = "mcp"
+from ai_qe_eval.domain.conversation import ToolInvocation
 
 
 def tool_invocation_from_observation(
@@ -75,43 +72,33 @@ def _as_tool_invocations(
     return materialized
 
 
-def build_mcp_evaluation_trace(
+def mcp_p0_request(
     *,
-    trace_id: str,
-    input: Any,
-    output: Any,
-    expected: Any,
     observed_tool_calls: Sequence[ToolInvocation],
     expected_tool_calls: Sequence[ToolInvocation],
-    application_id: str | None = None,
-) -> EvaluationTrace:
-    """Build an EvaluationTrace for an MCP tool scenario.
+    final_state_ok: bool,
+) -> dict[str, dict[str, list]]:
+    """Build a Design A P0 request from captured MCP tool calls.
 
-    Actual calls come only from observed_tool_calls. Expected calls come only
-    from expected_tool_calls. Neither is derived from expected or events.
+    Observed calls and expected calls are independent sequences. Expected
+    calls are a QE specification input and are never derived from telemetry.
+    final_state_ok is a caller-supplied bool.
     """
-    actual = _as_tool_invocations(
+    if not isinstance(final_state_ok, bool):
+        raise TypeError(
+            "mcp_p0_request requires final_state_ok to be bool, "
+            f"got {type(final_state_ok).__name__}"
+        )
+    observed = _as_tool_invocations(
         observed_tool_calls,
         field_name="observed_tool_calls",
     )
-    expected_calls = _as_tool_invocations(
+    expected = _as_tool_invocations(
         expected_tool_calls,
         field_name="expected_tool_calls",
     )
-    return EvaluationTrace(
-        trace_id=trace_id,
-        scenario_type=MCP_SCENARIO_TYPE,
-        input=input,
-        output=output,
-        expected=expected,
-        application_id=application_id,
-        turns=[
-            ConversationTurn(role="user", content=str(input)),
-            ConversationTurn(
-                role="assistant",
-                content=str(output),
-                tool_calls=list(actual),
-            ),
-        ],
-        expected_tool_calls=list(expected_calls),
-    )
+    return {
+        "tool_correctness": {"args": [observed, expected]},
+        "mcp_execution_health": {"args": [observed]},
+        "final_state": {"args": [final_state_ok]},
+    }

@@ -11,7 +11,6 @@ import pytest
 from langchain_openai import ChatOpenAI
 from ragas.llms import LangchainLLMWrapper
 
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.ragas import (
     FAITHFULNESS_METRIC,
     RAGAS_EVALUATOR_NAME,
@@ -30,19 +29,15 @@ SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 )
 def test_ragas_faithfulness_smoke_with_llama_judge(get_test_data):
     sample = get_test_data
-    trace = EvaluationTrace(
-        trace_id="pv-e-faithfulness-llama-smoke",
-        scenario_type="rag",
-        input=sample.user_input,
-        output=sample.response,
-        expected=sample.reference,
-        retrieval=list(sample.retrieved_contexts or []),
-    )
     llm = ChatOpenAI(model=SMOKE_JUDGE_MODEL, temperature=0)
     wrapper = LangchainLLMWrapper(llm)
     print("provider_model", SMOKE_JUDGE_MODEL)
 
-    results = RAGASFaithfulnessEvaluator(llm=wrapper).evaluate(trace)
+    results = RAGASFaithfulnessEvaluator(llm=wrapper).evaluate(
+        sample.user_input,
+        sample.response,
+        list(sample.retrieved_contexts or []),
+    )
 
     assert len(results) == 1
     result = results[0]

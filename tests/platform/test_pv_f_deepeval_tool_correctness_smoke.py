@@ -12,8 +12,7 @@ import os
 import pytest
 from deepeval.models.llms.local_model import LocalModel
 
-from ai_qe_eval.domain.conversation import ConversationTurn, ToolInvocation
-from ai_qe_eval.domain.trace import EvaluationTrace
+from ai_qe_eval.domain.conversation import ToolInvocation
 from ai_qe_eval.evaluators.deepeval_tool_correctness import DeepEvalToolCorrectnessEvaluator
 
 SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
@@ -35,22 +34,6 @@ def test_pv_f_deepeval_tool_correctness_smoke_returns_numeric_score():
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
     call = _weather()
-    trace = EvaluationTrace(
-        trace_id="pv-f-tool-correctness",
-        scenario_type="agent",
-        input="Find the weather for Pune.",
-        output="Temperature is 28 C and conditions are clear.",
-        expected="Temperature is 28 C and conditions are clear.",
-        turns=[
-            ConversationTurn(role="user", content="Find the weather for Pune."),
-            ConversationTurn(
-                role="assistant",
-                content="Temperature is 28 C and conditions are clear.",
-                tool_calls=[call],
-            ),
-        ],
-        expected_tool_calls=[_weather()],
-    )
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -59,7 +42,11 @@ def test_pv_f_deepeval_tool_correctness_smoke_returns_numeric_score():
     )
     print("provider_model", SMOKE_JUDGE_MODEL)
 
-    results = DeepEvalToolCorrectnessEvaluator(model=model).evaluate(trace)
+    results = DeepEvalToolCorrectnessEvaluator(model=model).evaluate(
+        [call],
+        [_weather()],
+        input="Find the weather for Pune.",
+    )
 
     assert len(results) == 1
     result = results[0]

@@ -12,7 +12,6 @@ import pytest
 from deepeval.models.llms.local_model import LocalModel
 
 from ai_qe_eval.domain.conversation import ConversationTurn
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval_turn_relevancy import DeepEvalTurnRelevancyEvaluator
 
 SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
@@ -25,19 +24,12 @@ def test_pv_f_deepeval_turn_relevancy_smoke_returns_numeric_score():
     if not api_key or not base_url:
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    trace = EvaluationTrace(
-        trace_id="pv-f-turn-relevancy",
-        scenario_type="chat",
-        input="What is 2 + 2?",
-        output="3 + 3 is 6.",
-        expected="3 + 3 is 6.",
-        turns=[
-            ConversationTurn(role="user", content="What is 2 + 2?"),
-            ConversationTurn(role="assistant", content="2 + 2 is 4."),
-            ConversationTurn(role="user", content="What is 3 + 3?"),
-            ConversationTurn(role="assistant", content="3 + 3 is 6."),
-        ],
-    )
+    turns = [
+        ConversationTurn(role="user", content="What is 2 + 2?"),
+        ConversationTurn(role="assistant", content="2 + 2 is 4."),
+        ConversationTurn(role="user", content="What is 3 + 3?"),
+        ConversationTurn(role="assistant", content="3 + 3 is 6."),
+    ]
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -46,7 +38,7 @@ def test_pv_f_deepeval_turn_relevancy_smoke_returns_numeric_score():
     )
     print("provider_model", SMOKE_JUDGE_MODEL)
 
-    results = DeepEvalTurnRelevancyEvaluator(model=model).evaluate(trace)
+    results = DeepEvalTurnRelevancyEvaluator(model=model).evaluate(turns)
 
     assert len(results) == 1
     result = results[0]

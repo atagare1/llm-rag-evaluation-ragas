@@ -1,6 +1,7 @@
 """Focused tests for the DeepEval contextual RAG adapters.
 
 Injects metric stubs. Does not call an external LLM.
+Does not construct EvaluationTrace.
 """
 
 from __future__ import annotations
@@ -8,7 +9,6 @@ from __future__ import annotations
 from deepeval.models.base_model import DeepEvalBaseLLM
 
 from ai_qe_eval.domain.result import EvaluationResult
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval import (
     CONTEXTUAL_PRECISION_METRIC,
     CONTEXTUAL_RECALL_METRIC,
@@ -18,6 +18,10 @@ from ai_qe_eval.evaluators.deepeval import (
     DeepEvalContextualRecallEvaluator,
     DeepEvalContextualRelevancyEvaluator,
 )
+
+CTX_INPUT = "What is 2 + 2?"
+CTX_EXPECTED = "4"
+CTX_RETRIEVAL = ["2 + 2 = 4"]
 
 
 class SentinelModel(DeepEvalBaseLLM):
@@ -45,19 +49,6 @@ class RecordingContextualMetric:
     def measure(self, test_case):
         self.test_case = test_case
         return self.score
-
-
-def _trace(**overrides) -> EvaluationTrace:
-    values = {
-        "trace_id": "trace-deepeval-contextual",
-        "scenario_type": "rag",
-        "input": "What is 2 + 2?",
-        "output": "SHOULD_NOT_BE_SENT",
-        "expected": "4",
-        "retrieval": ["2 + 2 = 4"],
-    }
-    values.update(overrides)
-    return EvaluationTrace(**values)
 
 
 def _mixed_retrieval():
@@ -88,9 +79,9 @@ def _assert_result(result, metric_name, metric):
 def test_contextual_relevancy_maps_input_and_retrieval_only():
     metric = RecordingContextualMetric()
     DeepEvalContextualRelevancyEvaluator(contextual_relevancy_metric=metric).evaluate(
-        _trace(retrieval=_mixed_retrieval())
+        CTX_INPUT, _mixed_retrieval()
     )
-    assert metric.test_case.input == "What is 2 + 2?"
+    assert metric.test_case.input == CTX_INPUT
     assert metric.test_case.retrieval_context == ["context one", "context two"]
     assert metric.test_case.actual_output is None
     assert metric.test_case.expected_output is None
@@ -103,7 +94,7 @@ def test_contextual_relevancy_maps_input_and_retrieval_only():
 def test_contextual_relevancy_missing_retrieval_is_an_empty_list():
     metric = RecordingContextualMetric()
     DeepEvalContextualRelevancyEvaluator(contextual_relevancy_metric=metric).evaluate(
-        _trace(retrieval=None)
+        CTX_INPUT, None
     )
     assert metric.test_case.retrieval_context == []
 
@@ -112,7 +103,7 @@ def test_contextual_relevancy_copies_score_reason_and_identity():
     metric = RecordingContextualMetric(score=0.66, reason="Relevant statements.")
     result = DeepEvalContextualRelevancyEvaluator(
         contextual_relevancy_metric=metric
-    ).evaluate(_trace())[0]
+    ).evaluate(CTX_INPUT, CTX_RETRIEVAL)[0]
     _assert_result(result, CONTEXTUAL_RELEVANCY_METRIC, metric)
     assert result.metric == "contextual_relevancy"
 
@@ -126,10 +117,10 @@ def test_contextual_relevancy_passes_the_injected_model():
 def test_contextual_precision_maps_input_expected_and_retrieval():
     metric = RecordingContextualMetric()
     DeepEvalContextualPrecisionEvaluator(contextual_precision_metric=metric).evaluate(
-        _trace(retrieval=_mixed_retrieval())
+        CTX_INPUT, CTX_EXPECTED, _mixed_retrieval()
     )
-    assert metric.test_case.input == "What is 2 + 2?"
-    assert metric.test_case.expected_output == "4"
+    assert metric.test_case.input == CTX_INPUT
+    assert metric.test_case.expected_output == CTX_EXPECTED
     assert metric.test_case.retrieval_context == ["context one", "context two"]
     assert metric.test_case.actual_output is None
     assert "SHOULD_NOT_BE_SENT" not in (
@@ -142,7 +133,7 @@ def test_contextual_precision_maps_input_expected_and_retrieval():
 def test_contextual_precision_empty_expected_and_retrieval_are_passed_through():
     metric = RecordingContextualMetric()
     DeepEvalContextualPrecisionEvaluator(contextual_precision_metric=metric).evaluate(
-        _trace(expected="", retrieval=[])
+        CTX_INPUT, "", []
     )
     assert metric.test_case.expected_output == ""
     assert metric.test_case.retrieval_context == []
@@ -153,7 +144,7 @@ def test_contextual_precision_copies_score_reason_and_identity():
     metric = RecordingContextualMetric(score=0.91, reason="Useful context is ranked first.")
     result = DeepEvalContextualPrecisionEvaluator(
         contextual_precision_metric=metric
-    ).evaluate(_trace())[0]
+    ).evaluate(CTX_INPUT, CTX_EXPECTED, CTX_RETRIEVAL)[0]
     _assert_result(result, CONTEXTUAL_PRECISION_METRIC, metric)
     assert result.metric == "contextual_precision"
 
@@ -167,10 +158,10 @@ def test_contextual_precision_passes_the_injected_model():
 def test_contextual_recall_maps_input_expected_and_retrieval():
     metric = RecordingContextualMetric()
     DeepEvalContextualRecallEvaluator(contextual_recall_metric=metric).evaluate(
-        _trace(retrieval=_mixed_retrieval())
+        CTX_INPUT, CTX_EXPECTED, _mixed_retrieval()
     )
-    assert metric.test_case.input == "What is 2 + 2?"
-    assert metric.test_case.expected_output == "4"
+    assert metric.test_case.input == CTX_INPUT
+    assert metric.test_case.expected_output == CTX_EXPECTED
     assert metric.test_case.retrieval_context == ["context one", "context two"]
     assert metric.test_case.actual_output is None
     assert "SHOULD_NOT_BE_SENT" not in (
@@ -183,9 +174,9 @@ def test_contextual_recall_maps_input_expected_and_retrieval():
 def test_contextual_recall_empty_expected_and_missing_retrieval_are_passed_through():
     metric = RecordingContextualMetric()
     DeepEvalContextualRecallEvaluator(contextual_recall_metric=metric).evaluate(
-        _trace(expected="", retrieval=None)
+        CTX_INPUT, "", None
     )
-    assert metric.test_case.input == "What is 2 + 2?"
+    assert metric.test_case.input == CTX_INPUT
     assert metric.test_case.expected_output == ""
     assert metric.test_case.retrieval_context == []
     assert metric.test_case.actual_output is None
@@ -195,7 +186,7 @@ def test_contextual_recall_copies_score_reason_and_identity():
     metric = RecordingContextualMetric(score=1.0, reason="The expected answer is in context.")
     result = DeepEvalContextualRecallEvaluator(
         contextual_recall_metric=metric
-    ).evaluate(_trace())[0]
+    ).evaluate(CTX_INPUT, CTX_EXPECTED, CTX_RETRIEVAL)[0]
     _assert_result(result, CONTEXTUAL_RECALL_METRIC, metric)
     assert result.metric == "contextual_recall"
 

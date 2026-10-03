@@ -84,10 +84,10 @@ Together AI is the OpenAI-compatible host. Model choice is `RAGAS_LLM_MODEL`. Th
 
 Package: `src/ai_qe_eval`. The core is provider-neutral. RAGAS and DeepEval appear only as evaluator adapters.
 
-Logical flow for one trace:
+Logical flow for one request map:
 
 ```text
-EvaluationTrace
+request map
        +
 EvaluationConfig          (which capability names should run)
        ↓
@@ -110,11 +110,11 @@ QualityGate.evaluate
 GateDecision
 ```
 
-`EvaluationRunner.run(trace, configuration)` still returns `GateDecision` for one trace. `run_many(traces, configuration)` evaluates each trace with the same config, in order, and stores one `EvaluationRun`. `traces[i]` matches `trace_evaluations[i]`, which holds that trace's normalized results and policy decisions. `results` and `decisions` are those same objects flattened in trace order. One `QualityGate.evaluate` call receives that flat decision list, so the existing any-fail rule applies to every policy decision in the run. There is no average, pass rate, or other run score. A failure still raises and clears `last_run` for that call. An empty trace list raises `ValueError`.
+`EvaluationRunner.run(request, configuration)` still returns `GateDecision` for one request map. `run_many(requests, configuration)` evaluates each request with the same config, in order, and stores one `EvaluationRun`. `requests[i]` matches `trace_evaluations[i]`, which holds that request's normalized results and policy decisions. `results` and `decisions` are those same objects flattened in request order. One `QualityGate.evaluate` call receives that flat decision list, so the existing any-fail rule applies to every policy decision in the run. There is no average, pass rate, or other run score. A failure still raises and clears `last_run` for that call. An empty request list raises `ValueError`.
 
 ```mermaid
 flowchart TD
-    T[EvaluationTrace] --> R[EvaluationRunner.run]
+    T[Request map] --> R[EvaluationRunner.run]
     C[EvaluationConfig] --> R
     Reg[EvaluationRegistry catalog lookup] --> R
     Inj[Injected evaluator instances and QualityPolicy map] --> R
@@ -133,11 +133,11 @@ The registry does not sit between config and the runner as an executor. `Evaluat
 
 | Component | Module | Responsibility |
 |---|---|---|
-| `EvaluationTrace` | `domain/trace.py` | Canonical input: `trace_id`, `scenario_type`, `input`, `output`, `expected`, optional `application_id`, `retrieval`, `turns`, `events`, `raw`. Evaluators receive this object. The runner does not rebuild or mutate it. |
+| Request map | Runner input | Capability-keyed `{"name": {"args": [...], "kwargs": {...}}}`. Evaluators receive their own arguments. The runner does not rebuild or mutate the map. |
 | Trace events | `domain/events.py` | Optional `events` entries are dicts with a `type` key (`make_trace_event`). No evaluator consumes them yet. Typed event classes are not implemented. |
-| `EvaluationRun` / `TraceEvaluation` | `domain/run.py` | One execution record. `traces[i]` aligns with `trace_evaluations[i]` (`results` and `decisions` for that trace). Flat `results` / `decisions` follow the same order. `gate_decision` is the existing gate outcome for those decisions. The run does not evaluate or aggregate scores. |
+| `EvaluationRun` / `TraceEvaluation` | `domain/run.py` | One execution record. `requests[i]` aligns with `trace_evaluations[i]` (`results` and `decisions` for that request). Flat `results` / `decisions` follow the same order. `gate_decision` is the existing gate outcome for those decisions. The run does not evaluate or aggregate scores. |
 | `EvaluationResult` | `domain/result.py` | What one metric measurement is: `metric`, `evaluator`, `score`, optional `reason`, `raw_result`. No threshold, no pass/fail, no severity. |
-| `Evaluator` | `domain/evaluator.py` | Sync protocol: `evaluate(trace, configuration=None) -> list[EvaluationResult]`. One evaluator may return more than one result. `configuration` is opaque and unused by current adapters. |
+| `Evaluator` | `domain/evaluator.py` | Sync protocol: `evaluate(*args, **kwargs) -> list[EvaluationResult]`. One evaluator may return more than one result. |
 | `EvaluationRegistry` / `EvaluationCapability` | `domain/registry.py` | Catalog of what can be named: `name`, `evaluator` (string), `category`. Duplicate register raises `ValueError`. Missing `get` raises `KeyError`. It does not store instances, thresholds, or policies. |
 | `EvaluationConfig` | `domain/config.py` | What should run: ordered `evaluations: list[str]`. Duplicates raise `ValueError`. Empty list is valid. It does not hold models, prompts, credentials, or thresholds. |
 | `DeterministicEvaluator` | `evaluators/deterministic.py` | `metric="exact_match"`, `evaluator="deterministic"`. Score `1.0` if `output == expected`, else `0.0`. No provider. |
@@ -146,7 +146,7 @@ The registry does not sit between config and the runner as an executor. `Evaluat
 | Result normalizer | `normalization/result_normalizer.py` | `normalize` / `normalize_many` copy an `EvaluationResult` and deepcopy `raw_result`. They do not change the score, apply policy, or rewrite vendor semantics. |
 | `QualityPolicy` / `PolicyDecision` | `policy/quality_policy.py` | Policy owns `metric`, `operator`, `threshold`. Operators: `>`, `>=`, `<`, `<=`, `==`, `!=`. `apply` compares one numeric score and returns `PolicyDecision` (`passed` lives here). Metric mismatch raises `ValueError`. The score on the result is not modified. |
 | `QualityGate` / `GateDecision` | `gate/quality_gate.py` | Gate consumes `PolicyDecision` objects and returns one `GateDecision(passed, decisions, reason)`. Any `passed is False` fails the gate. Empty decision list passes. The gate does not re-check score against threshold and does not average scores. This is an in-process decision, not a CI or deployment gate. |
-| `EvaluationRunner` | `runner/evaluation_runner.py` | `run(trace, configuration) -> GateDecision` delegates to `run_many([trace], configuration)`. Resolves catalog names, calls injected evaluators, normalizes, applies policies, then calls the gate once. |
+| `EvaluationRunner` | `runner/evaluation_runner.py` | `run(request, configuration) -> GateDecision` delegates to `run_many([request], configuration)`. Resolves catalog names, calls injected evaluators, normalizes, applies policies, then calls the gate once. |
 
 ### Provider-agnostic boundary
 

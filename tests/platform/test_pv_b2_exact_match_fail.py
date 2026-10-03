@@ -1,11 +1,10 @@
 """PV-B2: one exact_match FAIL through the real evaluation runner.
 
-Same wiring as PV-B1. The trace output does not equal expected.
+Same wiring as PV-B1. The request output does not equal expected.
 """
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deterministic import DeterministicEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -33,16 +32,10 @@ def test_pv_b2_deterministic_exact_match_fail_through_runner():
         },
         gate=QualityGate(),
     )
-    trace = EvaluationTrace(
-        trace_id="pv-b2",
-        scenario_type="qa",
-        input="2+2",
-        output="5",
-        expected="4",
-    )
+    request = {"exact_match": {"args": ["5", "4"], "kwargs": {}}}
     config = EvaluationConfig(evaluations=["exact_match"])
 
-    decision = runner.run(trace, config)
+    decision = runner.run(request, config)
 
     assert decision.passed is False
     assert runner.last_run is not None

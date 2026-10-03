@@ -12,7 +12,6 @@ import os
 import pytest
 from deepeval.models.llms.local_model import LocalModel
 
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval import DeepEvalGEvalCorrectnessEvaluator
 
 SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
@@ -25,13 +24,6 @@ def test_pv_f_deepeval_geval_smoke_returns_numeric_score():
     if not api_key or not base_url:
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    trace = EvaluationTrace(
-        trace_id="pv-f",
-        scenario_type="llm",
-        input="What is 2 + 2?",
-        output="4",
-        expected="4",
-    )
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -40,7 +32,11 @@ def test_pv_f_deepeval_geval_smoke_returns_numeric_score():
     )
     print("provider_model", SMOKE_JUDGE_MODEL)
 
-    results = DeepEvalGEvalCorrectnessEvaluator(model=model).evaluate(trace)
+    results = DeepEvalGEvalCorrectnessEvaluator(model=model).evaluate(
+        "What is 2 + 2?",
+        "4",
+        "4",
+    )
 
     assert len(results) == 1
     result = results[0]

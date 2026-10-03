@@ -13,7 +13,6 @@ from deepeval.models.llms.local_model import LocalModel
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval import DeepEvalGEvalCorrectnessEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -30,13 +29,9 @@ def test_pv_f1_deepeval_geval_through_runner():
     if not api_key or not base_url:
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    trace = EvaluationTrace(
-        trace_id="pv-f1",
-        scenario_type="llm",
-        input="What is 2 + 2?",
-        output="4",
-        expected="4",
-    )
+    request = {
+        "correctness": {"args": ["What is 2 + 2?", "4", "4"], "kwargs": {}},
+    }
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -58,7 +53,9 @@ def test_pv_f1_deepeval_geval_through_runner():
     )
     runner = EvaluationRunner(
         registry=registry,
-        evaluators={"correctness": DeepEvalGEvalCorrectnessEvaluator(model=model)},
+        evaluators={
+            "correctness": DeepEvalGEvalCorrectnessEvaluator(model=model)
+        },
         policies={"correctness": policy},
         gate=QualityGate(),
     )
@@ -66,7 +63,7 @@ def test_pv_f1_deepeval_geval_through_runner():
     print("provider_model", SMOKE_JUDGE_MODEL)
     print("policy_threshold", policy.threshold)
 
-    decision = runner.run(trace, config)
+    decision = runner.run(request, config)
 
     assert decision.passed is True
     assert runner.last_run is not None

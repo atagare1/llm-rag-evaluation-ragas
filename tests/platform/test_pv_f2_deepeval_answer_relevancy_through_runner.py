@@ -14,7 +14,6 @@ from deepeval.models.llms.local_model import LocalModel
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval import DeepEvalAnswerRelevancyEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -23,7 +22,6 @@ from utils import metric_threshold
 
 SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 
-
 @pytest.mark.live
 def test_pv_f2_deepeval_answer_relevancy_through_runner():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -31,13 +29,9 @@ def test_pv_f2_deepeval_answer_relevancy_through_runner():
     if not api_key or not base_url:
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    trace = EvaluationTrace(
-        trace_id="pv-f2-answer-relevancy",
-        scenario_type="llm",
-        input="What is 2 + 2?",
-        output="4",
-        expected="4",
-    )
+    request = {
+        "answer_relevancy": {"args": ["What is 2 + 2?", "4"], "kwargs": {}},
+    }
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -59,7 +53,9 @@ def test_pv_f2_deepeval_answer_relevancy_through_runner():
     )
     runner = EvaluationRunner(
         registry=registry,
-        evaluators={"answer_relevancy": DeepEvalAnswerRelevancyEvaluator(model=model)},
+        evaluators={
+            "answer_relevancy": DeepEvalAnswerRelevancyEvaluator(model=model)
+        },
         policies={"answer_relevancy": policy},
         gate=QualityGate(),
     )
@@ -67,7 +63,7 @@ def test_pv_f2_deepeval_answer_relevancy_through_runner():
     print("provider_model", SMOKE_JUDGE_MODEL)
     print("policy_threshold", policy.threshold)
 
-    decision = runner.run(trace, config)
+    decision = runner.run(request, config)
 
     assert decision.passed is True
     assert runner.last_run is not None

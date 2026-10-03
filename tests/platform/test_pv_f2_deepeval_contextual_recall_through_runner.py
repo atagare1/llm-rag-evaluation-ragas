@@ -13,7 +13,6 @@ from deepeval.models.llms.local_model import LocalModel
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval import DeepEvalContextualRecallEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -22,7 +21,6 @@ from utils import metric_threshold
 
 SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 
-
 @pytest.mark.live
 def test_pv_f2_deepeval_contextual_recall_through_runner():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -30,14 +28,12 @@ def test_pv_f2_deepeval_contextual_recall_through_runner():
     if not api_key or not base_url:
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    trace = EvaluationTrace(
-        trace_id="pv-f2-contextual-recall",
-        scenario_type="rag",
-        input="What is 2 + 2?",
-        output="4",
-        expected="4",
-        retrieval=["2 + 2 = 4"],
-    )
+    request = {
+        "contextual_recall": {
+            "args": ["What is 2 + 2?", "4", ["2 + 2 = 4"]],
+            "kwargs": {},
+        }
+    }
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -59,7 +55,9 @@ def test_pv_f2_deepeval_contextual_recall_through_runner():
     )
     runner = EvaluationRunner(
         registry=registry,
-        evaluators={"contextual_recall": DeepEvalContextualRecallEvaluator(model=model)},
+        evaluators={
+            "contextual_recall": DeepEvalContextualRecallEvaluator(model=model)
+        },
         policies={"contextual_recall": policy},
         gate=QualityGate(),
     )
@@ -68,7 +66,7 @@ def test_pv_f2_deepeval_contextual_recall_through_runner():
     print("policy_threshold", policy.threshold)
     print("policy_threshold_source", "metric_threshold('contextual_recall')")
 
-    decision = runner.run(trace, config)
+    decision = runner.run(request, config)
 
     assert decision.passed is True
     assert runner.last_run is not None

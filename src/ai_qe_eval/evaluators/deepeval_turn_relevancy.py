@@ -1,63 +1,68 @@
 """DeepEval Turn Relevancy adapter.
 
-Maps EvaluationTrace.turns into a DeepEval ConversationalTestCase and
-TurnRelevancyMetric.measure, then returns one EvaluationResult.
+Maps caller-supplied ConversationTurn items into a DeepEval
+ConversationalTestCase and TurnRelevancyMetric.measure, then returns one
+EvaluationResult.
 
 Turn relevancy is the DeepEval mechanism; evaluator identity is "deepeval".
 Does not apply DeepEval's threshold or metric.success. Does not auto-register.
-Does not read retrieval, expected, events, or tool calls.
+Does not read EvaluationTrace, retrieval, expected, events, or tool calls.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from ai_qe_eval.domain.conversation import ConversationTurn
 from ai_qe_eval.domain.result import EvaluationResult
-from ai_qe_eval.domain.trace import EvaluationTrace
 
 TURN_RELEVANCY_METRIC = "turn_relevancy"
 DEEPEVAL_EVALUATOR_NAME = "deepeval"
 
 
-def _conversation_turns(trace: EvaluationTrace) -> list[ConversationTurn]:
-    turns = trace.turns
+def _conversation_turns(turns: Sequence[ConversationTurn] | None) -> list[ConversationTurn]:
     if not turns:
         raise ValueError(
-            "DeepEvalTurnRelevancyEvaluator requires EvaluationTrace.turns "
+            "DeepEvalTurnRelevancyEvaluator requires turns "
             "to be a non-empty conversation"
         )
-    for index, turn in enumerate(turns):
+    materialized = list(turns)
+    for index, turn in enumerate(materialized):
         if not isinstance(turn, ConversationTurn):
             raise TypeError(
                 "DeepEvalTurnRelevancyEvaluator requires ConversationTurn items, "
                 f"got {type(turn).__name__} at index {index}"
             )
-    if not any(turn.role == "user" for turn in turns):
+    if not any(turn.role == "user" for turn in materialized):
         raise ValueError(
             "DeepEvalTurnRelevancyEvaluator requires at least one user turn"
         )
-    if turns[-1].role != "assistant":
+    if materialized[-1].role != "assistant":
         raise ValueError(
             "DeepEvalTurnRelevancyEvaluator requires the conversation to end "
             "with an assistant turn"
         )
-    return turns
+    return materialized
 
 
-def _trace_to_conversational_test_case(trace: EvaluationTrace) -> Any:
+def _to_conversational_test_case(turns: Sequence[ConversationTurn] | None) -> Any:
     from deepeval.test_case import ConversationalTestCase, Turn
 
-    turns = _conversation_turns(trace)
+    validated = _conversation_turns(turns)
     return ConversationalTestCase(
-        turns=[Turn(role=turn.role, content=turn.content) for turn in turns]
+        turns=[Turn(role=turn.role, content=turn.content) for turn in validated]
     )
 
 
 def _default_turn_relevancy_metric(*, model: Any | None) -> Any:
     from deepeval.metrics.turn_relevancy.turn_relevancy import TurnRelevancyMetric
 
-    return TurnRelevancyMetric(model=model, include_reason=True)
+    return TurnRelevancyMetric(
+        model=model,
+        include_reason=True,
+        async_mode=False,
+    )
 
 
 class DeepEvalTurnRelevancyEvaluator:
@@ -83,10 +88,10 @@ class DeepEvalTurnRelevancyEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        turns: Sequence[ConversationTurn],
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_conversational_test_case(trace)
+        test_case = _to_conversational_test_case(turns)
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score

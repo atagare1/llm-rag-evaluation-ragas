@@ -6,7 +6,6 @@ Does not use evaluator, policy, or gate doubles.
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deterministic import DeterministicEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -34,16 +33,10 @@ def test_pv_b1_deterministic_exact_match_pass_through_runner():
         },
         gate=QualityGate(),
     )
-    trace = EvaluationTrace(
-        trace_id="pv-b1",
-        scenario_type="qa",
-        input="2+2",
-        output="4",
-        expected="4",
-    )
+    request = {"exact_match": {"args": ["4", "4"], "kwargs": {}}}
     config = EvaluationConfig(evaluations=["exact_match"])
 
-    decision = runner.run(trace, config)
+    decision = runner.run(request, config)
 
     assert decision.passed is True
     assert runner.last_run is not None

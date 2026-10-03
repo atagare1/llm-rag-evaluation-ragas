@@ -12,7 +12,6 @@ import os
 import pytest
 from deepeval.models.llms.local_model import LocalModel
 
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval import DeepEvalHallucinationEvaluator
 
 SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
@@ -25,14 +24,6 @@ def test_pv_f_deepeval_hallucination_smoke_returns_numeric_score():
     if not api_key or not base_url:
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    trace = EvaluationTrace(
-        trace_id="pv-f-hallucination",
-        scenario_type="rag",
-        input="What is the capital of France?",
-        output="Paris.",
-        expected="Paris.",
-        retrieval=["Paris is the capital and largest city of France."],
-    )
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -41,7 +32,11 @@ def test_pv_f_deepeval_hallucination_smoke_returns_numeric_score():
     )
     print("provider_model", SMOKE_JUDGE_MODEL)
 
-    results = DeepEvalHallucinationEvaluator(model=model).evaluate(trace)
+    results = DeepEvalHallucinationEvaluator(model=model).evaluate(
+        "What is the capital of France?",
+        "Paris.",
+        ["Paris is the capital and largest city of France."],
+    )
 
     assert len(results) == 1
     result = results[0]

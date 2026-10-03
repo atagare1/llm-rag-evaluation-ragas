@@ -1,6 +1,6 @@
-"""P3-03 multi-trace EvaluationRun.
+"""P3-03 multi-request EvaluationRun.
 
-run() remains one trace. run_many() keeps per-trace results and decisions.
+run() remains one request map. run_many() keeps per-request results and decisions.
 No live providers. No score aggregation.
 """
 
@@ -12,20 +12,16 @@ from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
 from ai_qe_eval.domain.result import EvaluationResult
 from ai_qe_eval.domain.run import EvaluationRun
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.gate.quality_gate import GateDecision
 from ai_qe_eval.policy.quality_policy import QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
 
-def _trace(trace_id: str, output: str) -> EvaluationTrace:
-    return EvaluationTrace(
-        trace_id=trace_id,
-        scenario_type="qa",
-        input=trace_id,
-        output=output,
-        expected="gold",
-    )
+def _request(subject_id: str, output: str) -> dict:
+    return {
+        "correctness": {"args": [subject_id, output], "kwargs": {}},
+        "faithfulness": {"args": [subject_id, output], "kwargs": {}},
+    }
 
 
 class RecordingEvaluator:
@@ -34,14 +30,14 @@ class RecordingEvaluator:
         self.score_for_output = score_for_output
         self.received: list[str] = []
 
-    def evaluate(self, trace: EvaluationTrace, configuration=None) -> list[EvaluationResult]:
-        self.received.append(trace.trace_id)
+    def evaluate(self, subject_id, output, configuration=None) -> list[EvaluationResult]:
+        self.received.append(subject_id)
         return [
             EvaluationResult(
                 metric=self.metric,
                 evaluator="stub",
-                score=self.score_for_output[trace.output],
-                reason=trace.trace_id,
+                score=self.score_for_output[output],
+                reason=subject_id,
             )
         ]
 
@@ -55,24 +51,24 @@ def _runner(evaluators: dict) -> EvaluationRunner:
     return EvaluationRunner(registry=registry, evaluators=evaluators, policies=policies)
 
 
-def test_single_trace_run_still_returns_gate_decision():
+def test_single_request_run_still_returns_gate_decision():
     evaluator = RecordingEvaluator("correctness", {"ok": 0.9})
     runner = _runner({"correctness": evaluator})
-    trace = _trace("t1", "ok")
-    decision = runner.run(trace, EvaluationConfig(evaluations=["correctness"]), run_id="one")
+    request = _request("t1", "ok")
+    decision = runner.run(request, EvaluationConfig(evaluations=["correctness"]), run_id="one")
     assert isinstance(decision, GateDecision)
     assert decision.passed is True
     assert runner.last_run is not None
-    assert runner.last_run.traces == [trace]
+    assert runner.last_run.requests == [request]
     assert len(runner.last_run.trace_evaluations) == 1
     assert runner.last_run.trace_evaluations[0].results[0].score == 0.9
 
 
-def test_multiple_traces_stay_associated():
+def test_multiple_requests_stay_associated():
     evaluator = RecordingEvaluator("correctness", {"high": 0.95, "low": 0.2})
     runner = _runner({"correctness": evaluator})
-    first = _trace("trace-a", "high")
-    second = _trace("trace-b", "low")
+    first = _request("trace-a", "high")
+    second = _request("trace-b", "low")
     decision = runner.run_many(
         [first, second],
         EvaluationConfig(evaluations=["correctness"]),
@@ -80,8 +76,8 @@ def test_multiple_traces_stay_associated():
     )
     recorded = runner.last_run
     assert isinstance(recorded, EvaluationRun)
-    assert recorded.traces[0] is first
-    assert recorded.traces[1] is second
+    assert recorded.requests[0] is first
+    assert recorded.requests[1] is second
     assert evaluator.received == ["trace-a", "trace-b"]
     assert recorded.trace_evaluations[0].results[0].reason == "trace-a"
     assert recorded.trace_evaluations[0].results[0].score == 0.95
@@ -93,13 +89,13 @@ def test_multiple_traces_stay_associated():
     assert decision is recorded.gate_decision
 
 
-def test_two_traces_times_two_evaluators_do_not_mix():
+def test_two_requests_times_two_evaluators_do_not_mix():
     faithfulness = RecordingEvaluator("faithfulness", {"a": 0.91, "b": 0.7})
     correctness = RecordingEvaluator("correctness", {"a": 0.88, "b": 0.99})
     runner = _runner({"faithfulness": faithfulness, "correctness": correctness})
-    traces = [_trace("trace-a", "a"), _trace("trace-b", "b")]
+    requests = [_request("trace-a", "a"), _request("trace-b", "b")]
     runner.run_many(
-        traces,
+        requests,
         EvaluationConfig(evaluations=["faithfulness", "correctness"]),
         run_id="grid",
     )
@@ -125,11 +121,11 @@ def test_two_traces_times_two_evaluators_do_not_mix():
     assert [item.passed for item in recorded.decisions] == [True, True, False, True]
 
 
-def test_per_trace_policy_decisions_match_that_traces_results():
+def test_per_request_policy_decisions_match_that_requests_results():
     evaluator = RecordingEvaluator("correctness", {"high": 0.9, "low": 0.1})
     runner = _runner({"correctness": evaluator})
     runner.run_many(
-        [_trace("trace-a", "high"), _trace("trace-b", "low")],
+        [_request("trace-a", "high"), _request("trace-b", "low")],
         EvaluationConfig(evaluations=["correctness"]),
         run_id="policy",
     )
@@ -141,7 +137,7 @@ def test_per_trace_policy_decisions_match_that_traces_results():
         assert group.decisions[0].score == group.results[0].score
 
 
-def test_empty_trace_list_is_rejected():
+def test_empty_request_list_is_rejected():
     runner = _runner({"correctness": RecordingEvaluator("correctness", {})})
     with pytest.raises(ValueError, match="at least one"):
         runner.run_many([], EvaluationConfig(evaluations=["correctness"]))
@@ -150,7 +146,7 @@ def test_empty_trace_list_is_rejected():
 
 def test_evaluator_failure_does_not_keep_a_partial_run():
     class Failing:
-        def evaluate(self, trace, configuration=None):
+        def evaluate(self, *args, **kwargs):
             raise RuntimeError("boom")
 
     registry = EvaluationRegistry()
@@ -162,22 +158,25 @@ def test_evaluator_failure_does_not_keep_a_partial_run():
     )
     with pytest.raises(RuntimeError, match="boom"):
         runner.run_many(
-            [_trace("trace-a", "a"), _trace("trace-b", "b")],
+            [_request("trace-a", "a"), _request("trace-b", "b")],
             EvaluationConfig(evaluations=["correctness"]),
         )
     assert runner.last_run is None
 
 
-def test_multi_trace_record_round_trip_keeps_groups():
+def test_multi_request_record_round_trip_keeps_groups():
     evaluator = RecordingEvaluator("correctness", {"high": 0.9, "low": 0.1})
     runner = _runner({"correctness": evaluator})
     runner.run_many(
-        [_trace("trace-a", "high"), _trace("trace-b", "low")],
+        [_request("trace-a", "high"), _request("trace-b", "low")],
         EvaluationConfig(evaluations=["correctness"]),
         run_id="serial",
     )
     restored = EvaluationRun.from_dict(runner.last_run.to_dict())
-    assert [trace.trace_id for trace in restored.traces] == ["trace-a", "trace-b"]
+    assert [item["correctness"]["args"][0] for item in restored.requests] == [
+        "trace-a",
+        "trace-b",
+    ]
     assert restored.trace_evaluations[0].results[0].score == 0.9
     assert restored.trace_evaluations[1].decisions[0].passed is False
     assert restored.gate_decision is not None

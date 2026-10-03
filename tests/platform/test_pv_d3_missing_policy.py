@@ -8,7 +8,6 @@ import pytest
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deterministic import DeterministicEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
@@ -29,16 +28,10 @@ def test_pv_d3_missing_policy_raises_and_does_not_record_run():
         policies={},
         gate=QualityGate(),
     )
-    trace = EvaluationTrace(
-        trace_id="pv-d3",
-        scenario_type="qa",
-        input="2+2",
-        output="4",
-        expected="4",
-    )
+    request = {"exact_match": {"args": ["4", "4"], "kwargs": {}}}
     config = EvaluationConfig(evaluations=["exact_match"])
 
     with pytest.raises(KeyError, match="No quality policy configured for metric"):
-        runner.run(trace, config)
+        runner.run(request, config)
 
     assert runner.last_run is None

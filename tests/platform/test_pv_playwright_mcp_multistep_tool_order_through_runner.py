@@ -1,7 +1,7 @@
-"""PV P0 flagship e2e (PASS): NL task → Playwright MCP → Trace → gate → state.
+"""PV P0 flagship e2e (PASS): NL task → Playwright MCP → request map → gate.
 
 Natural-language task → real Playwright MCP multi-step TodoMVC flow →
-EvaluationTrace → ordered ToolCorrectness through Runner/Policy/Gate →
+request map → ordered ToolCorrectness through Runner/Policy/Gate →
 deterministic final-state validation → scenario_task_succeeded=True.
 
 Ordered tool names only:
@@ -9,13 +9,12 @@ browser_navigate → browser_snapshot → browser_click → browser_type
 → browser_click → browser_snapshot
 
 Final browser_snapshot is checked for "Buy milk" (inline text or
-[Snapshot](path) sidecar). That assertion is test-local and is not part
-of ToolCorrectness.
+[Snapshot](path) sidecar) by a separate deterministic evaluator.
 
 Scenario success requires BOTH separate evidence signals:
 1. ordered ToolCorrectness gate passes
 2. final TodoMVC state contains "Buy milk"
-No combined score or new evaluator is introduced.
+Each signal remains a separate metric; no combined score is introduced.
 
 Dynamic snapshot refs are used for live calls but are NOT copied into
 expected_tool_calls. ToolCorrectness uses evaluation_params=[].
@@ -26,7 +25,6 @@ from __future__ import annotations
 import math
 import re
 import shutil
-from pathlib import Path
 
 import pytest
 from deepeval.metrics.tool_correctness.tool_correctness import ToolCorrectnessMetric
@@ -34,18 +32,26 @@ from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
 from ai_qe_eval.capture.mcp_trace import (
-    build_mcp_evaluation_trace,
+    mcp_p0_request,
     tool_invocation_from_observation,
 )
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
 from ai_qe_eval.evaluators.deepeval_tool_correctness import DeepEvalToolCorrectnessEvaluator
+from ai_qe_eval.evaluators.deterministic import (
+    FINAL_STATE_METRIC,
+    MCP_EXECUTION_HEALTH_METRIC,
+    FinalStateEvaluator,
+    MCPExecutionHealthEvaluator,
+)
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.integrations.playwright_mcp import (
     PLAYWRIGHT_MCP_PACKAGE,
     TODO_MVC_URL,
     playwright_mcp_stdio_parameters,
     serialize_call_tool_result,
+    snapshot_body_from_serialized_result,
+    snapshot_contains_list_item,
 )
 from ai_qe_eval.policy.quality_policy import QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
@@ -60,26 +66,20 @@ EXPECTED_TOOL_ORDER = [
     "browser_click",
     "browser_snapshot",
 ]
-_SNAPSHOT_SIDECAR_RE = re.compile(r"\[Snapshot\]\(([^)]+)\)")
+P0_EVALUATIONS = [
+    "tool_correctness",
+    FINAL_STATE_METRIC,
+    MCP_EXECUTION_HEALTH_METRIC,
+]
 
 
 def _snapshot_text(plain_result: dict) -> str:
-    for item in plain_result.get("content") or []:
-        if isinstance(item, dict) and isinstance(item.get("text"), str):
-            return item["text"]
-    return ""
+    return snapshot_body_from_serialized_result(plain_result)
 
 
 def _resolve_snapshot_body(plain_result: dict) -> str:
-    """Return inline snapshot text, or sidecar file contents when referenced."""
-    text = _snapshot_text(plain_result)
-    match = _SNAPSHOT_SIDECAR_RE.search(text)
-    if match is None:
-        return text
-    path = Path(match.group(1))
-    if not path.is_file():
-        raise AssertionError(f"Snapshot sidecar not found: {path}")
-    return path.read_text(encoding="utf-8")
+    """Compatibility helper returning evidence already captured by integration."""
+    return snapshot_body_from_serialized_result(plain_result)
 
 
 def _ref_for_label(snapshot_text: str, label: str) -> str:
@@ -90,6 +90,59 @@ def _ref_for_label(snapshot_text: str, label: str) -> str:
     return match.group(1)
 
 
+def _final_state_contains_expected_todo(observed) -> bool:
+    for call in reversed(observed or []):
+        if call.name == "browser_snapshot" and isinstance(call.result, dict):
+            return snapshot_contains_list_item(
+                _resolve_snapshot_body(call.result),
+                EXPECTED_TODO_TEXT,
+            )
+    return False
+
+
+def _p0_runner(tool_correctness_metric) -> EvaluationRunner:
+    registry = EvaluationRegistry()
+    registry.register(
+        EvaluationCapability(
+            name="tool_correctness",
+            evaluator="deepeval",
+            category="agent",
+        )
+    )
+    for metric_name in (FINAL_STATE_METRIC, MCP_EXECUTION_HEALTH_METRIC):
+        registry.register(
+            EvaluationCapability(
+                name=metric_name,
+                evaluator="deterministic",
+                category="agent",
+            )
+        )
+    return EvaluationRunner(
+        registry=registry,
+        evaluators={
+            "tool_correctness": DeepEvalToolCorrectnessEvaluator(
+                tool_correctness_metric=tool_correctness_metric,
+            ),
+            FINAL_STATE_METRIC: FinalStateEvaluator(),
+            MCP_EXECUTION_HEALTH_METRIC: MCPExecutionHealthEvaluator(),
+        },
+        policies={
+            "tool_correctness": QualityPolicy(
+                metric="tool_correctness",
+                operator=">=",
+                threshold=TOOL_CORRECTNESS_THRESHOLD,
+            ),
+            FINAL_STATE_METRIC: QualityPolicy(
+                metric=FINAL_STATE_METRIC, operator="==", threshold=1.0
+            ),
+            MCP_EXECUTION_HEALTH_METRIC: QualityPolicy(
+                metric=MCP_EXECUTION_HEALTH_METRIC, operator="==", threshold=1.0
+            ),
+        },
+        gate=QualityGate(),
+    )
+
+
 @pytest.mark.live
 @pytest.mark.asyncio
 async def test_pv_playwright_mcp_flagship_todomvc_e2e_scenario_passes():
@@ -98,7 +151,6 @@ async def test_pv_playwright_mcp_flagship_todomvc_e2e_scenario_passes():
 
     goal = "Add 'Buy milk' to the Playwright TodoMVC demo."
     observed = []
-    final_state_ok = False
 
     async with stdio_client(playwright_mcp_stdio_parameters()) as (
         read_stream,
@@ -153,17 +205,10 @@ async def test_pv_playwright_mcp_flagship_todomvc_e2e_scenario_passes():
                     "target": heading_ref,
                 },
             )
-            final_snapshot = await _call("browser_snapshot", {})
-            # Evidence 1: deterministic final-state (test-local; not DeepEval).
-            final_body = _resolve_snapshot_body(final_snapshot)
-            final_state_ok = EXPECTED_TODO_TEXT in final_body
-            print("final_state_ok", final_state_ok)
-            assert final_state_ok, (
-                f"Expected TodoMVC state to contain {EXPECTED_TODO_TEXT!r}; "
-                f"resolved snapshot body starts with: {final_body[:500]!r}"
-            )
+            await _call("browser_snapshot", {})
 
     captured_names = [call.name for call in observed]
+    print("qe_supplied_input", goal)
     print("captured_tool_names", captured_names)
     assert captured_names == EXPECTED_TOOL_ORDER
 
@@ -172,17 +217,14 @@ async def test_pv_playwright_mcp_flagship_todomvc_e2e_scenario_passes():
         tool_invocation_from_observation(name=name, arguments=None, result=None)
         for name in EXPECTED_TOOL_ORDER
     ]
-    trace = build_mcp_evaluation_trace(
-        trace_id="pv-playwright-mcp-flagship-todomvc-e2e",
-        input=goal,
-        output="Added 'Buy milk' via the multi-step Playwright MCP flow.",
-        expected="Added 'Buy milk' via the multi-step Playwright MCP flow.",
+    assert [call.name for call in observed] == EXPECTED_TOOL_ORDER
+    assert all(call.arguments is None for call in expected_tool_calls)
+    assert all(call.result is None for call in expected_tool_calls)
+    request = mcp_p0_request(
         observed_tool_calls=observed,
         expected_tool_calls=expected_tool_calls,
+        final_state_ok=_final_state_contains_expected_todo(observed),
     )
-    assert [call.name for call in trace.turns[1].tool_calls] == EXPECTED_TOOL_ORDER
-    assert all(call.arguments is None for call in trace.expected_tool_calls)
-    assert all(call.result is None for call in trace.expected_tool_calls)
 
     metric = ToolCorrectnessMetric(
         should_exact_match=True,
@@ -192,45 +234,22 @@ async def test_pv_playwright_mcp_flagship_todomvc_e2e_scenario_passes():
         async_mode=False,
         model=None,
     )
-    registry = EvaluationRegistry()
-    registry.register(
-        EvaluationCapability(
-            name="tool_correctness",
-            evaluator="deepeval",
-            category="agent",
-        )
-    )
-    policy = QualityPolicy(
-        metric="tool_correctness",
-        operator=">=",
-        threshold=TOOL_CORRECTNESS_THRESHOLD,
-    )
-    runner = EvaluationRunner(
-        registry=registry,
-        evaluators={
-            "tool_correctness": DeepEvalToolCorrectnessEvaluator(
-                tool_correctness_metric=metric,
-            )
-        },
-        policies={"tool_correctness": policy},
-        gate=QualityGate(),
-    )
+    runner = _p0_runner(metric)
     print("evaluation_params", [])
-    print("policy_threshold", policy.threshold)
+    print("policy_threshold", TOOL_CORRECTNESS_THRESHOLD)
 
     decision = runner.run(
-        trace,
-        EvaluationConfig(evaluations=["tool_correctness"]),
+        request,
+        EvaluationConfig(evaluations=P0_EVALUATIONS),
         run_id="pv-playwright-mcp-flagship-todomvc-e2e",
     )
 
-    # Evidence 2: ordered ToolCorrectness through Runner / QualityGate.
-    tool_correctness_gate_passed = decision.passed is True
-    assert tool_correctness_gate_passed
+    assert decision.passed is True
     assert runner.last_run is not None
     assert runner.last_run.gate_decision is decision
-    assert runner.last_run.traces[0].scenario_type == "mcp"
-    result = runner.last_run.results[0]
+    assert runner.last_run.requests[0] is request
+    results = {result.metric: result for result in runner.last_run.results}
+    result = results["tool_correctness"]
     assert result.metric == "tool_correctness"
     assert result.evaluator == "deepeval"
     assert isinstance(result.score, (int, float)) and not isinstance(result.score, bool)
@@ -238,16 +257,14 @@ async def test_pv_playwright_mcp_flagship_todomvc_e2e_scenario_passes():
     assert result.score == 1.0
     assert result.score >= TOOL_CORRECTNESS_THRESHOLD
     assert result.reason is not None
-    assert runner.last_run.decisions[0].passed is True
+    assert all(item.passed for item in runner.last_run.decisions)
+    assert results[FINAL_STATE_METRIC].score == 1.0
+    assert results[MCP_EXECUTION_HEALTH_METRIC].score == 1.0
     print("tool_correctness_score", result.score)
     print("tool_correctness_reason", result.reason)
-    print("tool_correctness_gate_passed", tool_correctness_gate_passed)
-
-    # Scenario-level AND of the two separate evidence signals (no combined score).
-    scenario_task_succeeded = tool_correctness_gate_passed and final_state_ok
-    print("scenario_task_succeeded", scenario_task_succeeded)
-    assert scenario_task_succeeded, (
-        "Flagship task succeeds only when BOTH are true: "
-        f"tool_correctness_gate_passed={tool_correctness_gate_passed}, "
-        f"final_state_ok={final_state_ok}"
+    print("final_state_score", results[FINAL_STATE_METRIC].score)
+    print(
+        "mcp_execution_health_score",
+        results[MCP_EXECUTION_HEALTH_METRIC].score,
     )
+    print("gate_passed", decision.passed)

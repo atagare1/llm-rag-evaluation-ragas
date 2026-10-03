@@ -1,78 +1,58 @@
 """DeepEval Tool Correctness adapter.
 
-Maps flattened EvaluationTrace tool calls into an LLMTestCase and
-ToolCorrectnessMetric.measure, then returns one EvaluationResult.
+Maps caller-supplied observed and expected tool calls into an LLMTestCase
+and ToolCorrectnessMetric.measure, then returns one EvaluationResult.
 
-Tool correctness is the DeepEval mechanism; evaluator identity is "deepeval".
+Does not read EvaluationTrace. Observed and expected lists are independent.
 Does not apply DeepEval's threshold or metric.success. Does not auto-register.
-Does not read events, trace.expected, or MCP SDK types.
+Does not import MCP SDK types.
 
 Exact match compares arguments and results only when ToolCallParams
 INPUT_PARAMETERS and OUTPUT are selected. Those parameters are enabled so
 ToolInvocation.arguments and ToolInvocation.result participate in the score.
 None and {} are passed through unchanged. DeepEval treats them as different.
+
+DeepEval LLMTestCase still requires an input string. Pass input= to supply
+one; otherwise a placeholder is used. That string is not scored.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
-from ai_qe_eval.domain.conversation import ConversationTurn, ToolInvocation
+from ai_qe_eval.domain.conversation import ToolInvocation
 from ai_qe_eval.domain.result import EvaluationResult
-from ai_qe_eval.domain.trace import EvaluationTrace
 
 TOOL_CORRECTNESS_METRIC = "tool_correctness"
 DEEPEVAL_EVALUATOR_NAME = "deepeval"
+DEEPEVAL_INPUT_PLACEHOLDER = (
+    "tool_correctness input placeholder; not EvaluationTrace.input"
+)
 
 
-def _require_tool_correctness_inputs(
-    trace: EvaluationTrace,
-) -> tuple[list[ConversationTurn], list[ToolInvocation]]:
-    if trace.input is None:
+def _as_tool_invocations(
+    calls: Sequence[ToolInvocation] | None,
+    *,
+    field_name: str,
+) -> list[ToolInvocation]:
+    if calls is None:
         raise ValueError(
-            "DeepEvalToolCorrectnessEvaluator requires EvaluationTrace.input"
+            f"DeepEvalToolCorrectnessEvaluator requires {field_name}"
         )
-    if trace.turns is None:
-        raise ValueError(
-            "DeepEvalToolCorrectnessEvaluator requires EvaluationTrace.turns "
-            "so actual tool calls can be observed"
+    if not isinstance(calls, Sequence) or isinstance(calls, (str, bytes)):
+        raise TypeError(
+            f"DeepEvalToolCorrectnessEvaluator requires a sequence of "
+            f"ToolInvocation for {field_name}, got {type(calls).__name__}"
         )
-    if trace.expected_tool_calls is None:
-        raise ValueError(
-            "DeepEvalToolCorrectnessEvaluator requires "
-            "EvaluationTrace.expected_tool_calls"
-        )
-    for index, turn in enumerate(trace.turns):
-        if not isinstance(turn, ConversationTurn):
-            raise TypeError(
-                "DeepEvalToolCorrectnessEvaluator requires ConversationTurn items, "
-                f"got {type(turn).__name__} at index {index}"
-            )
-    for index, call in enumerate(trace.expected_tool_calls):
+    materialized = list(calls)
+    for index, call in enumerate(materialized):
         if not isinstance(call, ToolInvocation):
             raise TypeError(
                 "DeepEvalToolCorrectnessEvaluator requires ToolInvocation "
-                "expected_tool_calls, "
-                f"got {type(call).__name__} at index {index}"
+                f"{field_name}, got {type(call).__name__} at index {index}"
             )
-    return list(trace.turns), list(trace.expected_tool_calls)
-
-
-def _flatten_tool_calls(turns: list[ConversationTurn]) -> list[ToolInvocation]:
-    calls: list[ToolInvocation] = []
-    for turn_index, turn in enumerate(turns):
-        if turn.tool_calls is None:
-            continue
-        for call_index, call in enumerate(turn.tool_calls):
-            if not isinstance(call, ToolInvocation):
-                raise TypeError(
-                    "DeepEvalToolCorrectnessEvaluator requires ToolInvocation "
-                    "tool_calls, "
-                    f"got {type(call).__name__} at turn {turn_index} "
-                    f"index {call_index}"
-                )
-            calls.append(call)
-    return calls
+    return materialized
 
 
 def _to_tool_call(invocation: ToolInvocation) -> Any:
@@ -85,13 +65,17 @@ def _to_tool_call(invocation: ToolInvocation) -> Any:
     )
 
 
-def _trace_to_llm_test_case(trace: EvaluationTrace) -> Any:
+def _to_llm_test_case(
+    *,
+    observed: Sequence[ToolInvocation],
+    expected: Sequence[ToolInvocation],
+    input: Any,
+) -> Any:
     from deepeval.test_case import LLMTestCase
 
-    turns, expected = _require_tool_correctness_inputs(trace)
     return LLMTestCase(
-        input=trace.input,
-        tools_called=[_to_tool_call(call) for call in _flatten_tool_calls(turns)],
+        input=input,
+        tools_called=[_to_tool_call(call) for call in observed],
         expected_tools=[_to_tool_call(call) for call in expected],
     )
 
@@ -121,6 +105,7 @@ def _default_tool_correctness_metric(
             else _default_evaluation_params()
         ),
         include_reason=True,
+        async_mode=False,
         model=model,
     )
 
@@ -167,12 +152,23 @@ class DeepEvalToolCorrectnessEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        observed_tool_calls: Sequence[ToolInvocation],
+        expected_tool_calls: Sequence[ToolInvocation],
         configuration: Any | None = None,
+        *,
+        input: Any | None = None,
     ) -> list[EvaluationResult]:
-        turns, expected = _require_tool_correctness_inputs(trace)
-        actual = _flatten_tool_calls(turns)
-        test_case = _trace_to_llm_test_case(trace)
+        actual = _as_tool_invocations(
+            observed_tool_calls, field_name="observed_tool_calls"
+        )
+        expected = _as_tool_invocations(
+            expected_tool_calls, field_name="expected_tool_calls"
+        )
+        test_case = _to_llm_test_case(
+            observed=actual,
+            expected=expected,
+            input=DEEPEVAL_INPUT_PLACEHOLDER if input is None else input,
+        )
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score

@@ -11,13 +11,11 @@ from pathlib import Path
 import pytest
 
 from ai_qe_eval.capture.mcp_trace import (
-    MCP_SCENARIO_TYPE,
-    build_mcp_evaluation_trace,
     capture_executed_tool,
+    mcp_p0_request,
     tool_invocation_from_observation,
 )
 from ai_qe_eval.domain.conversation import ToolInvocation
-from ai_qe_eval.domain.trace import EvaluationTrace
 
 _CAPTURE_SOURCE = (
     Path(__file__).resolve().parents[1]
@@ -108,87 +106,43 @@ def test_capture_executed_tool_records_successful_result():
     assert call.result == "Temperature is 28 C and conditions are clear."
 
 
-def test_build_mcp_evaluation_trace_constructs_expected_shape():
-    actual = tool_invocation_from_observation(
-        name="weather",
-        arguments={"location": "Pune"},
-        result="Temperature is 28 C and conditions are clear.",
-    )
-    expected_call = tool_invocation_from_observation(
-        name="weather",
-        arguments={"location": "Pune"},
-        result="Temperature is 28 C and conditions are clear.",
-    )
-    trace = build_mcp_evaluation_trace(
-        trace_id="trace-mcp-capture-1",
-        input="Find the weather for Pune.",
-        output="Temperature is 28 C and conditions are clear.",
-        expected="Temperature is 28 C and conditions are clear.",
-        observed_tool_calls=[actual],
-        expected_tool_calls=[expected_call],
-    )
-    assert isinstance(trace, EvaluationTrace)
-    assert trace.scenario_type == MCP_SCENARIO_TYPE
-    assert trace.scenario_type == "mcp"
-    assert trace.input == "Find the weather for Pune."
-    assert trace.output == "Temperature is 28 C and conditions are clear."
-    assert trace.expected == "Temperature is 28 C and conditions are clear."
-    assert len(trace.turns) == 2
-    assert trace.turns[0].role == "user"
-    assert trace.turns[0].content == "Find the weather for Pune."
-    assert trace.turns[0].tool_calls is None
-    assert trace.turns[1].role == "assistant"
-    assert trace.turns[1].content == "Temperature is 28 C and conditions are clear."
-    assert trace.turns[1].tool_calls == [actual]
-    assert trace.expected_tool_calls == [expected_call]
-    assert trace.events is None
-
-
-def test_actual_and_expected_tool_calls_remain_separate():
-    actual = tool_invocation_from_observation(
-        name="weather",
-        arguments={"location": "Pune"},
-        result="28 C",
-    )
-    expected_call = tool_invocation_from_observation(
-        name="calendar",
-        arguments={"location": "Pune"},
-        result="none",
-    )
-    trace = build_mcp_evaluation_trace(
-        trace_id="trace-mcp-separate",
-        input="Find the weather for Pune.",
-        output="28 C",
-        expected="SHOULD_NOT_BECOME_A_TOOL_CALL",
-        observed_tool_calls=[actual],
-        expected_tool_calls=[expected_call],
-    )
-    assert [call.name for call in trace.turns[1].tool_calls] == ["weather"]
-    assert [call.name for call in trace.expected_tool_calls] == ["calendar"]
-    assert trace.expected == "SHOULD_NOT_BECOME_A_TOOL_CALL"
-    assert "calendar" not in [call.name for call in trace.turns[1].tool_calls]
-    assert "weather" not in [call.name for call in trace.expected_tool_calls]
-
-
-def test_multiple_observed_calls_preserve_order_on_the_trace():
+def test_mcp_p0_request_keeps_expected_independent_of_observed():
     observed = [
         tool_invocation_from_observation(name="a", arguments={"n": 1}, result=1),
         tool_invocation_from_observation(name="b", arguments={"n": 2}, result=2),
     ]
     expected_calls = [
-        tool_invocation_from_observation(name="a", arguments={"n": 1}, result=1),
-        tool_invocation_from_observation(name="b", arguments={"n": 2}, result=2),
+        tool_invocation_from_observation(name="b", arguments=None, result=None),
+        tool_invocation_from_observation(name="a", arguments=None, result=None),
     ]
-    trace = build_mcp_evaluation_trace(
-        trace_id="trace-mcp-order",
-        input="goal",
-        output="done",
-        expected="done",
+    request = mcp_p0_request(
         observed_tool_calls=observed,
         expected_tool_calls=expected_calls,
+        final_state_ok=True,
     )
-    assert [call.name for call in trace.turns[1].tool_calls] == ["a", "b"]
-    assert [call.name for call in trace.expected_tool_calls] == ["a", "b"]
+    assert set(request) == {
+        "tool_correctness",
+        "mcp_execution_health",
+        "final_state",
+    }
+    observed_args, expected_args = request["tool_correctness"]["args"]
+    assert [call.name for call in observed_args] == ["a", "b"]
+    assert [call.name for call in expected_args] == ["b", "a"]
+    assert expected_args is not observed_args
+    assert request["mcp_execution_health"]["args"][0] is observed_args
+    assert request["final_state"]["args"] == [True]
+    assert "kwargs" not in request["tool_correctness"]
+
+
+def test_mcp_p0_request_rejects_non_bool_final_state():
+    observed = [tool_invocation_from_observation(name="a")]
+    expected_calls = [tool_invocation_from_observation(name="a")]
+    with pytest.raises(TypeError, match="final_state_ok"):
+        mcp_p0_request(
+            observed_tool_calls=observed,
+            expected_tool_calls=expected_calls,
+            final_state_ok=1,  # type: ignore[arg-type]
+        )
 
 
 def test_capture_module_does_not_import_mcp_or_deepeval():

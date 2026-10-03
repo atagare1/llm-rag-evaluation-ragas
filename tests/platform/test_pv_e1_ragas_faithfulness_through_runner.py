@@ -13,7 +13,6 @@ from ragas.llms import LangchainLLMWrapper
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.ragas import RAGASFaithfulnessEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -31,14 +30,16 @@ SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 )
 def test_pv_e1_ragas_faithfulness_through_runner(get_test_data):
     sample = get_test_data
-    trace = EvaluationTrace(
-        trace_id="pv-e1",
-        scenario_type="rag",
-        input=sample.user_input,
-        output=sample.response,
-        expected=sample.reference,
-        retrieval=list(sample.retrieved_contexts or []),
-    )
+    request = {
+        "faithfulness": {
+            "args": [
+                sample.user_input,
+                sample.response,
+                list(sample.retrieved_contexts or []),
+            ],
+            "kwargs": {},
+        }
+    }
     llm = ChatOpenAI(model=SMOKE_JUDGE_MODEL, temperature=0)
     wrapper = LangchainLLMWrapper(llm)
     registry = EvaluationRegistry()
@@ -51,7 +52,9 @@ def test_pv_e1_ragas_faithfulness_through_runner(get_test_data):
     )
     runner = EvaluationRunner(
         registry=registry,
-        evaluators={"faithfulness": RAGASFaithfulnessEvaluator(llm=wrapper)},
+        evaluators={
+            "faithfulness": RAGASFaithfulnessEvaluator(llm=wrapper)
+        },
         policies={
             "faithfulness": QualityPolicy(
                 metric="faithfulness",
@@ -64,7 +67,7 @@ def test_pv_e1_ragas_faithfulness_through_runner(get_test_data):
     config = EvaluationConfig(evaluations=["faithfulness"])
     print("provider_model", SMOKE_JUDGE_MODEL)
 
-    decision = runner.run(trace, config)
+    decision = runner.run(request, config)
 
     assert decision.passed is True
     assert runner.last_run is not None

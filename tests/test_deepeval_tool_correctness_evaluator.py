@@ -1,6 +1,7 @@
 """Focused tests for DeepEvalToolCorrectnessEvaluator.
 
 Injects a ToolCorrectnessMetric stub. Does not call an external LLM.
+Does not construct EvaluationTrace.
 """
 
 from __future__ import annotations
@@ -10,20 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from ai_qe_eval.domain.config import EvaluationConfig
-from ai_qe_eval.domain.conversation import ConversationTurn, ToolInvocation
-from ai_qe_eval.domain.evaluator import Evaluator
-from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
+from ai_qe_eval.domain.conversation import ToolInvocation
 from ai_qe_eval.domain.result import EvaluationResult
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval_tool_correctness import (
     DEEPEVAL_EVALUATOR_NAME,
+    DEEPEVAL_INPUT_PLACEHOLDER,
     TOOL_CORRECTNESS_METRIC,
     DeepEvalToolCorrectnessEvaluator,
 )
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
-from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
 _ADAPTER_SOURCE = (
     Path(__file__).resolve().parents[1]
@@ -32,6 +29,8 @@ _ADAPTER_SOURCE = (
     / "evaluators"
     / "deepeval_tool_correctness.py"
 )
+
+WEATHER_INPUT = "Find the weather for Pune."
 
 
 class RecordingToolCorrectnessMetric:
@@ -57,42 +56,22 @@ def _weather() -> ToolInvocation:
     )
 
 
-def _trace(**overrides) -> EvaluationTrace:
-    values = {
-        "trace_id": "trace-tool-correctness",
-        "scenario_type": "agent",
-        "input": "Find the weather for Pune.",
-        "output": "SHOULD_NOT_BE_USED_AS_TOOLS",
-        "expected": "SHOULD_NOT_BE_USED_AS_TOOLS",
-        "retrieval": ["SHOULD_NOT_BE_SENT"],
-        "events": [{"type": "tool_call", "name": "SHOULD_NOT_BE_SENT"}],
-        "turns": [
-            ConversationTurn(role="user", content="Find the weather for Pune."),
-            ConversationTurn(
-                role="assistant",
-                content="It is 28 C and clear in Pune.",
-                tool_calls=[_weather()],
-            ),
-        ],
-        "expected_tool_calls": [_weather()],
-    }
-    values.update(overrides)
-    return EvaluationTrace(**values)
-
-
-def test_evaluator_conforms_to_protocol():
-    evaluator = DeepEvalToolCorrectnessEvaluator(
-        tool_correctness_metric=RecordingToolCorrectnessMetric()
-    )
-    assert isinstance(evaluator, Evaluator)
+def _evaluate(metric, observed=None, expected=None, **kwargs):
+    if observed is None:
+        observed = [_weather()]
+    if expected is None:
+        expected = [_weather()]
+    return DeepEvalToolCorrectnessEvaluator(
+        tool_correctness_metric=metric
+    ).evaluate(observed, expected, **kwargs)
 
 
 def test_single_tool_call_maps_name_arguments_and_result():
     metric = RecordingToolCorrectnessMetric()
-    DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(_trace())
+    _evaluate(metric, input=WEATHER_INPUT)
     called = metric.test_case.tools_called
     expected = metric.test_case.expected_tools
-    assert metric.test_case.input == "Find the weather for Pune."
+    assert metric.test_case.input == WEATHER_INPUT
     assert type(metric.test_case).__name__ == "LLMTestCase"
     assert len(called) == 1
     assert called[0].name == "weather"
@@ -102,24 +81,19 @@ def test_single_tool_call_maps_name_arguments_and_result():
     assert expected[0].name == "weather"
     assert expected[0].input_parameters == {"location": "Pune"}
     assert expected[0].output == called[0].output
-    assert "SHOULD_NOT_BE_USED_AS_TOOLS" not in repr(metric.test_case)
-    assert "SHOULD_NOT_BE_SENT" not in repr(metric.test_case)
 
 
-def test_multiple_tool_calls_preserve_conversation_order():
+def test_input_defaults_to_placeholder_when_omitted():
+    metric = RecordingToolCorrectnessMetric()
+    _evaluate(metric)
+    assert metric.test_case.input == DEEPEVAL_INPUT_PLACEHOLDER
+
+
+def test_multiple_tool_calls_preserve_list_order():
     first = ToolInvocation(name="lookup_city", arguments={"q": "Pune"}, result="in")
     second = ToolInvocation(name="weather", arguments={"location": "Pune"}, result="28 C")
     metric = RecordingToolCorrectnessMetric()
-    DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-        _trace(
-            turns=[
-                ConversationTurn(role="user", content="Find the weather for Pune."),
-                ConversationTurn(role="assistant", content="Looking up the city.", tool_calls=[first]),
-                ConversationTurn(role="assistant", content="It is 28 C.", tool_calls=[second]),
-            ],
-            expected_tool_calls=[first, second],
-        )
-    )
+    _evaluate(metric, observed=[first, second], expected=[first, second])
     assert [call.name for call in metric.test_case.tools_called] == ["lookup_city", "weather"]
     assert [call.name for call in metric.test_case.expected_tools] == ["lookup_city", "weather"]
     assert metric.test_case.tools_called[0].input_parameters == {"q": "Pune"}
@@ -128,17 +102,10 @@ def test_multiple_tool_calls_preserve_conversation_order():
 
 def test_none_arguments_are_not_rewritten_to_an_empty_dict():
     metric = RecordingToolCorrectnessMetric()
-    DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-        _trace(
-            turns=[
-                ConversationTurn(
-                    role="assistant",
-                    content="Called.",
-                    tool_calls=[ToolInvocation(name="weather", arguments=None, result=None)],
-                )
-            ],
-            expected_tool_calls=[ToolInvocation(name="weather", arguments={}, result=None)],
-        )
+    _evaluate(
+        metric,
+        observed=[ToolInvocation(name="weather", arguments=None, result=None)],
+        expected=[ToolInvocation(name="weather", arguments={}, result=None)],
     )
     actual = metric.test_case.tools_called[0]
     expected = metric.test_case.expected_tools[0]
@@ -149,9 +116,7 @@ def test_none_arguments_are_not_rewritten_to_an_empty_dict():
 
 def test_result_identity_score_and_reason():
     metric = RecordingToolCorrectnessMetric(score=0.91, reason="Names and arguments match.")
-    result = DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-        _trace()
-    )[0]
+    result = _evaluate(metric, input=WEATHER_INPUT)[0]
     assert isinstance(result, EvaluationResult)
     assert result.metric == TOOL_CORRECTNESS_METRIC
     assert result.metric == "tool_correctness"
@@ -162,6 +127,7 @@ def test_result_identity_score_and_reason():
     assert result.reason == "Names and arguments match."
     assert result.reason is metric.reason
     assert result.raw_result["tools_called"][0]["arguments"] == {"location": "Pune"}
+    assert result.raw_result["input"] == WEATHER_INPUT
     assert "threshold" not in result.raw_result
     assert "success" not in result.raw_result
     assert "passed" not in result.raw_result
@@ -169,27 +135,19 @@ def test_result_identity_score_and_reason():
 
 def test_mismatched_tools_are_passed_through_without_being_rewritten():
     metric = RecordingToolCorrectnessMetric(score=0.0, reason="Not an exact match.")
-    DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-        _trace(
-            expected_tool_calls=[
-                ToolInvocation(name="calendar", arguments={"location": "Pune"}, result="none")
-            ]
-        )
+    _evaluate(
+        metric,
+        expected=[
+            ToolInvocation(name="calendar", arguments={"location": "Pune"}, result="none")
+        ],
     )
     assert metric.test_case.tools_called[0].name == "weather"
     assert metric.test_case.expected_tools[0].name == "calendar"
 
 
-def test_turns_without_tool_calls_map_to_an_empty_called_list():
+def test_empty_observed_list_maps_to_an_empty_called_list():
     metric = RecordingToolCorrectnessMetric()
-    DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-        _trace(
-            turns=[
-                ConversationTurn(role="user", content="Find the weather for Pune."),
-                ConversationTurn(role="assistant", content="I cannot look that up.", tool_calls=None),
-            ]
-        )
-    )
+    _evaluate(metric, observed=[], expected=[_weather()])
     assert metric.test_case.tools_called == []
     assert len(metric.test_case.expected_tools) == 1
     assert metric.measure_calls == 1
@@ -197,22 +155,17 @@ def test_turns_without_tool_calls_map_to_an_empty_called_list():
 
 def test_empty_expected_tool_calls_are_not_fabricated():
     metric = RecordingToolCorrectnessMetric()
-    DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-        _trace(
-            turns=[ConversationTurn(role="assistant", content="No tools.", tool_calls=[])],
-            expected_tool_calls=[],
-        )
-    )
+    _evaluate(metric, observed=[], expected=[])
     assert metric.test_case.tools_called == []
     assert metric.test_case.expected_tools == []
     assert metric.measure_calls == 1
 
 
-def test_missing_turns_raise_before_the_metric_is_called():
+def test_missing_observed_tool_calls_raise_before_the_metric_is_called():
     metric = RecordingToolCorrectnessMetric()
-    with pytest.raises(ValueError, match="turns"):
+    with pytest.raises(ValueError, match="observed_tool_calls"):
         DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-            _trace(turns=None)
+            None, [_weather()]
         )
     assert metric.measure_calls == 0
 
@@ -221,19 +174,9 @@ def test_missing_expected_tool_calls_raise_before_the_metric_is_called():
     metric = RecordingToolCorrectnessMetric()
     with pytest.raises(ValueError, match="expected_tool_calls"):
         DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-            _trace(expected_tool_calls=None)
+            [_weather()], None
         )
     assert metric.measure_calls == 0
-
-
-def test_empty_turn_list_is_an_observed_conversation_with_no_calls():
-    metric = RecordingToolCorrectnessMetric()
-    DeepEvalToolCorrectnessEvaluator(tool_correctness_metric=metric).evaluate(
-        _trace(turns=[], expected_tool_calls=[])
-    )
-    assert metric.test_case.tools_called == []
-    assert metric.test_case.expected_tools == []
-    assert metric.measure_calls == 1
 
 
 def test_default_metric_enables_exact_match_of_arguments_and_output():
@@ -255,7 +198,9 @@ def test_default_metric_enables_exact_match_of_arguments_and_output():
     metric_module.ToolCorrectnessMetric = CapturingMetric
     try:
         model = object()
-        DeepEvalToolCorrectnessEvaluator(model=model).evaluate(_trace())
+        DeepEvalToolCorrectnessEvaluator(model=model).evaluate(
+            [_weather()], [_weather()]
+        )
     finally:
         metric_module.ToolCorrectnessMetric = original
 
@@ -267,56 +212,61 @@ def test_default_metric_enables_exact_match_of_arguments_and_output():
     assert ToolCallParams.OUTPUT in captured["evaluation_params"]
 
 
-def test_adapter_does_not_import_mcp():
+def test_evaluation_params_can_select_input_parameters_only():
+    from deepeval.metrics.tool_correctness import tool_correctness as metric_module
+    from deepeval.test_case import ToolCallParams
+
+    captured: dict = {}
+
+    class CapturingMetric:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.score = 1.0
+            self.reason = "captured"
+
+        def measure(self, test_case):
+            self.test_case = test_case
+
+    original = metric_module.ToolCorrectnessMetric
+    metric_module.ToolCorrectnessMetric = CapturingMetric
+    try:
+        DeepEvalToolCorrectnessEvaluator(
+            evaluation_params=[ToolCallParams.INPUT_PARAMETERS]
+        ).evaluate([_weather()], [_weather()])
+    finally:
+        metric_module.ToolCorrectnessMetric = original
+
+    assert captured["evaluation_params"] == [ToolCallParams.INPUT_PARAMETERS]
+    assert captured["should_exact_match"] is True
+
+
+def test_adapter_does_not_import_mcp_or_evaluation_trace():
     tree = ast.parse(_ADAPTER_SOURCE.read_text(encoding="utf-8"))
     imported: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+            imported.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module.split(".", 1)[0])
+            imported.add(node.module)
     assert "mcp" not in imported
+    assert "ai_qe_eval.domain.trace" not in imported
+    assert not any(name.endswith(".trace") for name in imported)
 
 
-def test_runner_applies_policy_and_gate_to_tool_correctness():
+def test_policy_and_gate_apply_to_direct_tool_correctness_result():
     metric = RecordingToolCorrectnessMetric(score=0.91, reason="Exact match.")
-    registry = EvaluationRegistry()
-    registry.register(
-        EvaluationCapability(
-            name="tool_correctness",
-            evaluator="deepeval",
-            category="agent",
-        )
-    )
-    policy = QualityPolicy(metric="tool_correctness", operator=">=", threshold=0.8)
-    runner = EvaluationRunner(
-        registry=registry,
-        evaluators={
-            "tool_correctness": DeepEvalToolCorrectnessEvaluator(
-                tool_correctness_metric=metric
-            )
-        },
-        policies={"tool_correctness": policy},
-        gate=QualityGate(),
-    )
+    result = _evaluate(metric)[0]
+    decision = QualityPolicy(
+        metric="tool_correctness", operator=">=", threshold=0.8
+    ).apply(result)
+    gate = QualityGate().evaluate([decision])
 
-    decision = runner.run(
-        _trace(),
-        EvaluationConfig(evaluations=["tool_correctness"]),
-        run_id="run-tool-correctness",
-    )
-
-    assert decision.passed is True
-    assert runner.last_run is not None
-    assert runner.last_run.run_id == "run-tool-correctness"
-    assert runner.last_run.gate_decision is decision
-    assert len(runner.last_run.results) == 1
-    result = runner.last_run.results[0]
     assert result.metric == "tool_correctness"
     assert result.evaluator == "deepeval"
     assert result.score == 0.91
     assert result.reason == "Exact match."
-    assert runner.last_run.decisions[0].passed is True
-    assert runner.last_run.decisions[0].threshold == 0.8
+    assert decision.passed is True
+    assert decision.threshold == 0.8
+    assert gate.passed is True
     assert metric.measure_calls == 1
     assert metric.test_case.expected_tools[0].name == "weather"

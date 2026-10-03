@@ -7,14 +7,13 @@ import pytest
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
 
 class _FailingEvaluator:
-    def evaluate(self, trace, configuration=None):
+    def evaluate(self, *args, **kwargs):
         raise RuntimeError("synthetic evaluator failure")
 
 
@@ -39,16 +38,10 @@ def test_pv_d4_evaluator_runtime_failure_does_not_record_run():
         },
         gate=QualityGate(),
     )
-    trace = EvaluationTrace(
-        trace_id="pv-d4",
-        scenario_type="qa",
-        input="2+2",
-        output="4",
-        expected="4",
-    )
+    request = {"synthetic": {"args": ["4", "4"], "kwargs": {}}}
     config = EvaluationConfig(evaluations=["synthetic"])
 
     with pytest.raises(RuntimeError, match="synthetic evaluator failure"):
-        runner.run(trace, config)
+        runner.run(request, config)
 
     assert runner.last_run is None

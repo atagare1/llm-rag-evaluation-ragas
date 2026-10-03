@@ -7,8 +7,8 @@ Proves the scenario AND:
 - observed tool order differs from expected → ToolCorrectness gate fails
 - scenario_task_succeeded is therefore False
 
-ToolCorrectness and final-state remain separate evidence. No combined score
-or new evaluator.
+ToolCorrectness, final-state, and execution health remain separate metrics.
+No combined score.
 """
 
 from __future__ import annotations
@@ -22,26 +22,28 @@ from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
 from ai_qe_eval.capture.mcp_trace import (
-    build_mcp_evaluation_trace,
+    mcp_p0_request,
     tool_invocation_from_observation,
 )
 from ai_qe_eval.domain.config import EvaluationConfig
-from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.evaluators.deepeval_tool_correctness import DeepEvalToolCorrectnessEvaluator
-from ai_qe_eval.gate.quality_gate import QualityGate
+from ai_qe_eval.evaluators.deterministic import (
+    FINAL_STATE_METRIC,
+    MCP_EXECUTION_HEALTH_METRIC,
+)
 from ai_qe_eval.integrations.playwright_mcp import (
     PLAYWRIGHT_MCP_PACKAGE,
     TODO_MVC_URL,
     playwright_mcp_stdio_parameters,
     serialize_call_tool_result,
 )
-from ai_qe_eval.policy.quality_policy import QualityPolicy
-from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
 from test_pv_playwright_mcp_multistep_tool_order_through_runner import (  # noqa: E402
     EXPECTED_TODO_TEXT,
     EXPECTED_TOOL_ORDER,
+    P0_EVALUATIONS,
     TOOL_CORRECTNESS_THRESHOLD,
+    _final_state_contains_expected_todo,
+    _p0_runner,
     _ref_for_label,
     _resolve_snapshot_body,
     _snapshot_text,
@@ -66,7 +68,6 @@ async def test_pv_playwright_mcp_multistep_wrong_tool_order_final_state_ok_scena
 
     goal = "Add a todo item on the Playwright TodoMVC demo."
     observed = []
-    final_state_ok = False
 
     async with stdio_client(playwright_mcp_stdio_parameters()) as (
         read_stream,
@@ -124,11 +125,10 @@ async def test_pv_playwright_mcp_multistep_wrong_tool_order_final_state_ok_scena
                 },
             )
 
-            # Evidence 1: application outcome is still correct.
+            # Confirm the application outcome is correct before pipeline evaluation.
             final_body = _resolve_snapshot_body(post_type_snapshot)
-            final_state_ok = EXPECTED_TODO_TEXT in final_body
-            print("final_state_ok", final_state_ok)
-            assert final_state_ok is True, (
+            print("final_state_ok", EXPECTED_TODO_TEXT in final_body)
+            assert EXPECTED_TODO_TEXT in final_body, (
                 f"Negative wrong-order case requires {EXPECTED_TODO_TEXT!r} present; "
                 f"resolved snapshot body starts with: {final_body[:500]!r}"
             )
@@ -142,15 +142,15 @@ async def test_pv_playwright_mcp_multistep_wrong_tool_order_final_state_ok_scena
         tool_invocation_from_observation(name=name, arguments=None, result=None)
         for name in EXPECTED_TOOL_ORDER
     ]
-    trace = build_mcp_evaluation_trace(
-        trace_id="pv-playwright-mcp-multistep-wrong-tool-order",
-        input=goal,
-        output="Multi-step Playwright MCP flow with intentional wrong tool order.",
-        expected="Multi-step Playwright MCP flow with intentional wrong tool order.",
+    print("qe_supplied_input", goal)
+    request = mcp_p0_request(
         observed_tool_calls=observed,
         expected_tool_calls=expected_tool_calls,
+        final_state_ok=_final_state_contains_expected_todo(observed),
     )
-    assert [call.name for call in trace.turns[1].tool_calls] == WRONG_TOOL_ORDER
+    assert [call.name for call in request["tool_correctness"]["args"][0]] == (
+        WRONG_TOOL_ORDER
+    )
 
     metric = ToolCorrectnessMetric(
         should_exact_match=True,
@@ -160,53 +160,30 @@ async def test_pv_playwright_mcp_multistep_wrong_tool_order_final_state_ok_scena
         async_mode=False,
         model=None,
     )
-    registry = EvaluationRegistry()
-    registry.register(
-        EvaluationCapability(
-            name="tool_correctness",
-            evaluator="deepeval",
-            category="agent",
-        )
-    )
-    policy = QualityPolicy(
-        metric="tool_correctness",
-        operator=">=",
-        threshold=TOOL_CORRECTNESS_THRESHOLD,
-    )
-    runner = EvaluationRunner(
-        registry=registry,
-        evaluators={
-            "tool_correctness": DeepEvalToolCorrectnessEvaluator(
-                tool_correctness_metric=metric,
-            )
-        },
-        policies={"tool_correctness": policy},
-        gate=QualityGate(),
-    )
+    runner = _p0_runner(metric)
 
     decision = runner.run(
-        trace,
-        EvaluationConfig(evaluations=["tool_correctness"]),
+        request,
+        EvaluationConfig(evaluations=P0_EVALUATIONS),
         run_id="pv-playwright-mcp-multistep-wrong-tool-order",
     )
 
-    # Evidence 2: ToolCorrectness gate fails on wrong order.
-    tool_correctness_gate_passed = decision.passed is True
+    assert decision.passed is False
     assert runner.last_run is not None
-    result = runner.last_run.results[0]
+    results = {result.metric: result for result in runner.last_run.results}
+    result = results["tool_correctness"]
     assert result.metric == "tool_correctness"
     assert isinstance(result.score, (int, float)) and not isinstance(result.score, bool)
     assert math.isfinite(result.score)
     assert result.score < TOOL_CORRECTNESS_THRESHOLD
-    assert tool_correctness_gate_passed is False
+    assert results[FINAL_STATE_METRIC].score == 1.0
+    assert results[MCP_EXECUTION_HEALTH_METRIC].score == 1.0
+    decisions = {item.metric: item for item in runner.last_run.decisions}
+    assert decisions["tool_correctness"].passed is False
+    assert decisions[FINAL_STATE_METRIC].passed is True
+    assert decisions[MCP_EXECUTION_HEALTH_METRIC].passed is True
     print("tool_correctness_score", result.score)
     print("tool_correctness_reason", result.reason)
-    print("tool_correctness_gate_passed", tool_correctness_gate_passed)
-
-    scenario_task_succeeded = tool_correctness_gate_passed and final_state_ok
-    print("scenario_task_succeeded", scenario_task_succeeded)
-    assert scenario_task_succeeded is False, (
-        "Wrong-order scenario must fail overall despite correct final state: "
-        f"tool_correctness_gate_passed={tool_correctness_gate_passed}, "
-        f"final_state_ok={final_state_ok}"
-    )
+    print("final_state_score", results[FINAL_STATE_METRIC].score)
+    print("mcp_execution_health_score", results[MCP_EXECUTION_HEALTH_METRIC].score)
+    print("gate_passed", decision.passed)

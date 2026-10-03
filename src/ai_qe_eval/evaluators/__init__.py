@@ -11,7 +11,11 @@ from ai_qe_eval.evaluators.deepeval_tool_correctness import (
     DeepEvalToolCorrectnessEvaluator,
 )
 from ai_qe_eval.evaluators.deepeval_turn_relevancy import DeepEvalTurnRelevancyEvaluator
-from ai_qe_eval.evaluators.deterministic import DeterministicEvaluator
+from ai_qe_eval.evaluators.deterministic import (
+    DeterministicEvaluator,
+    FinalStateEvaluator,
+    MCPExecutionHealthEvaluator,
+)
 from ai_qe_eval.evaluators.ragas import RAGASFaithfulnessEvaluator
 
 __all__ = [
@@ -25,5 +29,7 @@ __all__ = [
     "DeepEvalToolCorrectnessEvaluator",
     "DeepEvalTurnRelevancyEvaluator",
     "DeterministicEvaluator",
+    "FinalStateEvaluator",
+    "MCPExecutionHealthEvaluator",
     "RAGASFaithfulnessEvaluator",
 ]

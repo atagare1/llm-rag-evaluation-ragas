@@ -1,12 +1,11 @@
-"""PV-C3: two traces, one exact_match FAIL, through run_many.
+"""PV-C3: two requests, one exact_match FAIL, through run_many.
 
-Same wiring as PV-B3. The failing policy decision stays on the second trace.
+Same wiring as PV-B3. The failing policy decision stays on the second request.
 The run gate fails when any policy decision fails.
 """
 
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deterministic import DeterministicEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -34,23 +33,11 @@ def test_pv_c3_multi_trace_one_fail_through_runner():
         },
         gate=QualityGate(),
     )
-    trace1 = EvaluationTrace(
-        trace_id="pv-c3-1",
-        scenario_type="qa",
-        input="2+2",
-        output="4",
-        expected="4",
-    )
-    trace2 = EvaluationTrace(
-        trace_id="pv-c3-2",
-        scenario_type="qa",
-        input="2+2",
-        output="5",
-        expected="4",
-    )
+    request1 = {"exact_match": {"args": ["4", "4"], "kwargs": {}}}
+    request2 = {"exact_match": {"args": ["5", "4"], "kwargs": {}}}
     config = EvaluationConfig(evaluations=["exact_match"])
 
-    decision = runner.run_many([trace1, trace2], config)
+    decision = runner.run_many([request1, request2], config)
 
     assert decision.passed is False
     assert runner.last_run is not None

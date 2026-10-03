@@ -16,7 +16,6 @@ from deepeval.models.llms.local_model import LocalModel
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.conversation import ConversationTurn
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.deepeval_turn_relevancy import DeepEvalTurnRelevancyEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
@@ -33,19 +32,18 @@ def test_pv_f3_deepeval_turn_relevancy_through_runner():
     if not api_key or not base_url:
         pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    trace = EvaluationTrace(
-        trace_id="pv-f3-turn-relevancy",
-        scenario_type="chat",
-        input="What is 2 + 2?",
-        output="3 + 3 is 6.",
-        expected="3 + 3 is 6.",
-        turns=[
-            ConversationTurn(role="user", content="What is 2 + 2?"),
-            ConversationTurn(role="assistant", content="2 + 2 is 4."),
-            ConversationTurn(role="user", content="What is 3 + 3?"),
-            ConversationTurn(role="assistant", content="3 + 3 is 6."),
-        ],
-    )
+    turns = [
+        ConversationTurn(role="user", content="What is 2 + 2?"),
+        ConversationTurn(role="assistant", content="2 + 2 is 4."),
+        ConversationTurn(role="user", content="What is 3 + 3?"),
+        ConversationTurn(role="assistant", content="3 + 3 is 6."),
+    ]
+    request = {
+        "turn_relevancy": {
+            "args": [turns],
+            "kwargs": {},
+        }
+    }
     model = LocalModel(
         model=SMOKE_JUDGE_MODEL,
         api_key=api_key,
@@ -67,7 +65,9 @@ def test_pv_f3_deepeval_turn_relevancy_through_runner():
     )
     runner = EvaluationRunner(
         registry=registry,
-        evaluators={"turn_relevancy": DeepEvalTurnRelevancyEvaluator(model=model)},
+        evaluators={
+            "turn_relevancy": DeepEvalTurnRelevancyEvaluator(model=model)
+        },
         policies={"turn_relevancy": policy},
         gate=QualityGate(),
     )
@@ -75,7 +75,7 @@ def test_pv_f3_deepeval_turn_relevancy_through_runner():
     print("provider_model", SMOKE_JUDGE_MODEL)
     print("policy_threshold", policy.threshold)
 
-    decision = runner.run(trace, config, run_id="pv-f3-turn-relevancy")
+    decision = runner.run(request, config, run_id="pv-f3-turn-relevancy")
 
     assert decision.passed is True
     assert runner.last_run is not None

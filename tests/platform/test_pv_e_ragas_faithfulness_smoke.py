@@ -8,7 +8,6 @@ import math
 
 import pytest
 
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.evaluators.ragas import (
     FAITHFULNESS_METRIC,
     RAGAS_EVALUATOR_NAME,
@@ -25,17 +24,13 @@ from utils import llm_model_name, read_test_data
 )
 def test_ragas_faithfulness_smoke_returns_numeric_score(get_test_data, llm_wrapper):
     sample = get_test_data
-    trace = EvaluationTrace(
-        trace_id="pv-e-faithfulness-smoke",
-        scenario_type="rag",
-        input=sample.user_input,
-        output=sample.response,
-        expected=sample.reference,
-        retrieval=list(sample.retrieved_contexts or []),
-    )
     print("provider_model", llm_model_name())
 
-    results = RAGASFaithfulnessEvaluator(llm=llm_wrapper).evaluate(trace)
+    results = RAGASFaithfulnessEvaluator(llm=llm_wrapper).evaluate(
+        sample.user_input,
+        sample.response,
+        list(sample.retrieved_contexts or []),
+    )
 
     assert len(results) == 1
     result = results[0]

@@ -1,4 +1,4 @@
-"""PV: real Playwright MCP → capture → ToolCorrectness through EvaluationRunner.
+"""PV: real Playwright MCP → capture → ToolCorrectness through Policy/Gate.
 
 Uses INPUT_PARAMETERS-only exact match so dynamic browser_navigate output is
 ignored. Compares tool name and URL arguments. Platform gate is an explicit
@@ -16,12 +16,7 @@ from deepeval.test_case import ToolCallParams
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
-from ai_qe_eval.capture.mcp_trace import (
-    build_mcp_evaluation_trace,
-    tool_invocation_from_observation,
-)
-from ai_qe_eval.domain.config import EvaluationConfig
-from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
+from ai_qe_eval.capture.mcp_trace import tool_invocation_from_observation
 from ai_qe_eval.evaluators.deepeval_tool_correctness import DeepEvalToolCorrectnessEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.integrations.playwright_mcp import (
@@ -31,7 +26,6 @@ from ai_qe_eval.integrations.playwright_mcp import (
     serialize_call_tool_result,
 )
 from ai_qe_eval.policy.quality_policy import QualityPolicy
-from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
 TOOL_CORRECTNESS_THRESHOLD = 0.80
 
@@ -66,14 +60,6 @@ async def test_pv_playwright_mcp_tool_correctness_through_runner():
                 arguments={"url": TODO_MVC_URL},
                 result=None,
             )
-            trace = build_mcp_evaluation_trace(
-                trace_id="pv-playwright-mcp-tool-correctness",
-                input=goal,
-                output="Navigated to the Playwright TodoMVC demo.",
-                expected="Navigated to the Playwright TodoMVC demo.",
-                observed_tool_calls=[observed],
-                expected_tool_calls=[expected_call],
-            )
 
     metric = ToolCorrectnessMetric(
         should_exact_match=True,
@@ -83,44 +69,21 @@ async def test_pv_playwright_mcp_tool_correctness_through_runner():
         async_mode=False,
         model=None,
     )
-    registry = EvaluationRegistry()
-    registry.register(
-        EvaluationCapability(
-            name="tool_correctness",
-            evaluator="deepeval",
-            category="agent",
-        )
-    )
     policy = QualityPolicy(
         metric="tool_correctness",
         operator=">=",
         threshold=TOOL_CORRECTNESS_THRESHOLD,
     )
-    runner = EvaluationRunner(
-        registry=registry,
-        evaluators={
-            "tool_correctness": DeepEvalToolCorrectnessEvaluator(
-                tool_correctness_metric=metric,
-            )
-        },
-        policies={"tool_correctness": policy},
-        gate=QualityGate(),
-    )
     print("policy_threshold", policy.threshold)
     print("evaluation_params", ["INPUT_PARAMETERS"])
 
-    decision = runner.run(
-        trace,
-        EvaluationConfig(evaluations=["tool_correctness"]),
-        run_id="pv-playwright-mcp-tool-correctness",
-    )
+    result = DeepEvalToolCorrectnessEvaluator(
+        tool_correctness_metric=metric,
+    ).evaluate([observed], [expected_call], input=goal)[0]
+    policy_decision = policy.apply(result)
+    decision = QualityGate().evaluate([policy_decision])
 
     assert decision.passed is True
-    assert runner.last_run is not None
-    assert runner.last_run.gate_decision is decision
-    assert runner.last_run.traces[0].scenario_type == "mcp"
-    assert len(runner.last_run.results) == 1
-    result = runner.last_run.results[0]
     assert result.metric == "tool_correctness"
     assert result.evaluator == "deepeval"
     assert isinstance(result.score, (int, float)) and not isinstance(result.score, bool)
@@ -129,8 +92,8 @@ async def test_pv_playwright_mcp_tool_correctness_through_runner():
     assert result.score >= TOOL_CORRECTNESS_THRESHOLD
     assert result.reason is not None
     assert isinstance(result.reason, str) and result.reason.strip() != ""
-    assert runner.last_run.decisions[0].passed is True
-    assert runner.last_run.decisions[0].threshold == TOOL_CORRECTNESS_THRESHOLD
+    assert policy_decision.passed is True
+    assert policy_decision.threshold == TOOL_CORRECTNESS_THRESHOLD
     print("tool_correctness_score", result.score)
     print("tool_correctness_reason", result.reason)
     print("gate_passed", decision.passed)

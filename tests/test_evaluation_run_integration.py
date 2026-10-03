@@ -12,20 +12,13 @@ from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
 from ai_qe_eval.domain.result import EvaluationResult
 from ai_qe_eval.domain.run import EvaluationRun
-from ai_qe_eval.domain.trace import EvaluationTrace
 from ai_qe_eval.gate.quality_gate import GateDecision
 from ai_qe_eval.policy.quality_policy import PolicyDecision, QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
 
-def _trace() -> EvaluationTrace:
-    return EvaluationTrace(
-        trace_id="trace-run-1",
-        scenario_type="qa",
-        input="question",
-        output="answer",
-        expected="answer",
-    )
+def _request(*names: str) -> dict:
+    return {name: {"args": ["question"], "kwargs": {}} for name in names}
 
 
 def _result(metric: str, score: float, evaluator: str) -> EvaluationResult:
@@ -43,7 +36,7 @@ class StubEvaluator:
         self.error = error
         self.call_count = 0
 
-    def evaluate(self, trace: EvaluationTrace, configuration=None) -> list[EvaluationResult]:
+    def evaluate(self, *args, **kwargs) -> list[EvaluationResult]:
         self.call_count += 1
         if self.error is not None:
             raise self.error
@@ -70,15 +63,16 @@ def test_runner_records_an_evaluation_run():
         evaluators={"correctness": StubEvaluator([_result("correctness", 0.9, "fake")])},
         policies=_policies("correctness"),
     )
+    request = _request("correctness")
     decision = runner.run(
-        _trace(),
+        request,
         EvaluationConfig(evaluations=["correctness"]),
         run_id="run-001",
     )
     recorded = runner.last_run
     assert isinstance(recorded, EvaluationRun)
     assert recorded.run_id == "run-001"
-    assert recorded.traces[0].trace_id == "trace-run-1"
+    assert recorded.requests == [request]
     assert recorded.gate_decision is decision
     assert decision.passed is True
 
@@ -90,7 +84,7 @@ def test_single_evaluator_result_is_recorded():
         evaluators={"correctness": StubEvaluator([raw])},
         policies=_policies("correctness"),
     )
-    runner.run(_trace(), EvaluationConfig(evaluations=["correctness"]), run_id="run-single")
+    runner.run(_request("correctness"), EvaluationConfig(evaluations=["correctness"]), run_id="run-single")
     recorded = runner.last_run
     assert recorded is not None
     assert len(recorded.results) == 1
@@ -112,13 +106,13 @@ def test_multiple_evaluators_share_one_run():
         policies=_policies("faithfulness", "correctness", "exact_match"),
     )
     runner.run(
-        _trace(),
+        _request("faithfulness", "correctness", "exact_match"),
         EvaluationConfig(evaluations=["faithfulness", "correctness", "exact_match"]),
         run_id="run-multi",
     )
     recorded = runner.last_run
     assert recorded is not None
-    assert len(recorded.traces) == 1
+    assert len(recorded.requests) == 1
     assert [item.evaluator for item in recorded.results] == [
         "ragas",
         "deepeval",
@@ -137,7 +131,7 @@ def test_run_keeps_policy_decisions_without_reapplying_policy():
         evaluators={"correctness": StubEvaluator([_result("correctness", 0.7, "fake")])},
         policies={"correctness": QualityPolicy(metric="correctness", operator=">=", threshold=0.8)},
     )
-    runner.run(_trace(), EvaluationConfig(evaluations=["correctness"]), run_id="run-policy")
+    runner.run(_request("correctness"), EvaluationConfig(evaluations=["correctness"]), run_id="run-policy")
     recorded = runner.last_run
     assert recorded is not None
     assert len(recorded.decisions) == 1
@@ -162,7 +156,7 @@ def test_run_exposes_the_gate_decision():
         },
     )
     returned = runner.run(
-        _trace(),
+        _request("exact_match", "correctness"),
         EvaluationConfig(evaluations=["exact_match", "correctness"]),
         run_id="run-gate",
     )
@@ -181,7 +175,7 @@ def test_existing_run_return_value_remains_a_gate_decision():
         evaluators={"correctness": StubEvaluator([_result("correctness", 0.9, "fake")])},
         policies=_policies("correctness"),
     )
-    decision = runner.run(_trace(), EvaluationConfig(evaluations=["correctness"]))
+    decision = runner.run(_request("correctness"), EvaluationConfig(evaluations=["correctness"]))
     assert isinstance(decision, GateDecision)
     assert decision.passed is True
     assert runner.last_run is not None
@@ -201,20 +195,25 @@ def test_evaluator_failure_does_not_record_a_run():
         policies=_policies("correctness"),
     )
     with pytest.raises(RuntimeError, match="evaluator failed"):
-        runner.run(_trace(), EvaluationConfig(evaluations=["correctness"]), run_id="run-fail")
+        runner.run(
+            _request("correctness"),
+            EvaluationConfig(evaluations=["correctness"]),
+            run_id="run-fail",
+        )
     assert runner.last_run is None
 
 
 def test_recorded_run_round_trip():
+    request = _request("correctness")
     runner = EvaluationRunner(
         registry=_registry("correctness"),
         evaluators={"correctness": StubEvaluator([_result("correctness", 0.9, "fake")])},
         policies=_policies("correctness"),
     )
-    runner.run(_trace(), EvaluationConfig(evaluations=["correctness"]), run_id="run-serial")
+    runner.run(request, EvaluationConfig(evaluations=["correctness"]), run_id="run-serial")
     restored = EvaluationRun.from_dict(runner.last_run.to_dict())
     assert restored.run_id == "run-serial"
-    assert restored.traces[0].trace_id == "trace-run-1"
+    assert restored.requests[0]["correctness"]["args"] == ["question"]
     assert restored.results[0].score == 0.9
     assert restored.decisions[0].passed is True
     assert restored.gate_decision is not None

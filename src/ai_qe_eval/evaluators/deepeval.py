@@ -1,10 +1,10 @@
-"""P2-10 DeepEval GEval correctness evaluator adapter.
+"""DeepEval evaluator adapters.
 
-Maps EvaluationTrace into DeepEval 2.7.0 LLMTestCase fields and GEval.measure,
-then returns one EvaluationResult.
+Each adapter maps caller-supplied evidence into DeepEval 2.7.0 LLMTestCase
+fields and metric.measure. Does not read EvaluationTrace.
 
-GEval is the DeepEval mechanism; evaluator identity is "deepeval".
-Does not apply framework thresholds or PASS/FAIL. Does not auto-register.
+Evaluator identity is "deepeval". Does not apply framework thresholds or
+PASS/FAIL. Does not auto-register.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any
 
 from ai_qe_eval.domain.result import EvaluationResult
-from ai_qe_eval.domain.trace import EvaluationTrace
 
 CORRECTNESS_METRIC = "correctness"
 FAITHFULNESS_METRIC = "faithfulness"
@@ -28,13 +27,13 @@ DEFAULT_CRITERIA = (
     "based on the expected output."
 )
 
-def _trace_to_llm_test_case(trace: EvaluationTrace) -> Any:
+def _geval_llm_test_case(*, input: Any, output: Any, expected: Any) -> Any:
     from deepeval.test_case import LLMTestCase
 
     return LLMTestCase(
-        input=trace.input,
-        actual_output=trace.output,
-        expected_output=trace.expected,
+        input=input,
+        actual_output=output,
+        expected_output=expected,
     )
 
 
@@ -55,6 +54,7 @@ def _default_geval_metric(
             LLMTestCaseParams.EXPECTED_OUTPUT,
         ],
         "model": model,
+        "async_mode": False,
     }
     if evaluation_steps is not None:
         kwargs["evaluation_steps"] = evaluation_steps
@@ -88,10 +88,14 @@ class DeepEvalGEvalCorrectnessEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        input: Any,
+        output: Any,
+        expected: Any,
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_llm_test_case(trace)
+        test_case = _geval_llm_test_case(
+            input=input, output=output, expected=expected
+        )
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score
@@ -132,20 +136,22 @@ def _retrieval_context(retrieval: list[Any] | None) -> list[str]:
     return contexts
 
 
-def _trace_to_faithfulness_test_case(trace: EvaluationTrace) -> Any:
+def _faithfulness_llm_test_case(
+    *, input: Any, output: Any, retrieval: list[Any] | None
+) -> Any:
     from deepeval.test_case import LLMTestCase
 
     return LLMTestCase(
-        input=trace.input,
-        actual_output=trace.output,
-        retrieval_context=_retrieval_context(trace.retrieval),
+        input=input,
+        actual_output=output,
+        retrieval_context=_retrieval_context(retrieval),
     )
 
 
 def _default_faithfulness_metric(*, model: Any | None) -> Any:
     from deepeval.metrics.faithfulness.faithfulness import FaithfulnessMetric
 
-    return FaithfulnessMetric(model=model)
+    return FaithfulnessMetric(model=model, async_mode=False)
 
 
 class DeepEvalFaithfulnessEvaluator:
@@ -153,7 +159,7 @@ class DeepEvalFaithfulnessEvaluator:
 
     Returns metric="faithfulness" and evaluator="deepeval".
     Does not apply DeepEval's threshold or metric.success.
-    Does not import RAGAS.
+    Does not import RAGAS. Does not read EvaluationTrace.
     """
 
     def __init__(
@@ -172,10 +178,14 @@ class DeepEvalFaithfulnessEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        input: Any,
+        output: Any,
+        retrieval: list[Any] | None,
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_faithfulness_test_case(trace)
+        test_case = _faithfulness_llm_test_case(
+            input=input, output=output, retrieval=retrieval
+        )
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score
@@ -197,19 +207,19 @@ class DeepEvalFaithfulnessEvaluator:
         ]
 
 
-def _trace_to_answer_relevancy_test_case(trace: EvaluationTrace) -> Any:
+def _answer_relevancy_llm_test_case(*, input: Any, output: Any) -> Any:
     from deepeval.test_case import LLMTestCase
 
     return LLMTestCase(
-        input=trace.input,
-        actual_output=trace.output,
+        input=input,
+        actual_output=output,
     )
 
 
 def _default_answer_relevancy_metric(*, model: Any | None) -> Any:
     from deepeval.metrics.answer_relevancy.answer_relevancy import AnswerRelevancyMetric
 
-    return AnswerRelevancyMetric(model=model)
+    return AnswerRelevancyMetric(model=model, async_mode=False)
 
 
 class DeepEvalAnswerRelevancyEvaluator:
@@ -217,7 +227,7 @@ class DeepEvalAnswerRelevancyEvaluator:
 
     Returns metric="answer_relevancy" and evaluator="deepeval".
     Does not apply DeepEval's threshold or metric.success.
-    Does not import RAGAS.
+    Does not import RAGAS. Does not read EvaluationTrace.
     """
 
     def __init__(
@@ -236,10 +246,11 @@ class DeepEvalAnswerRelevancyEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        input: Any,
+        output: Any,
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_answer_relevancy_test_case(trace)
+        test_case = _answer_relevancy_llm_test_case(input=input, output=output)
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score
@@ -260,12 +271,14 @@ class DeepEvalAnswerRelevancyEvaluator:
         ]
 
 
-def _trace_to_contextual_relevancy_test_case(trace: EvaluationTrace) -> Any:
+def _contextual_relevancy_llm_test_case(
+    *, input: Any, retrieval: list[Any] | None
+) -> Any:
     from deepeval.test_case import LLMTestCase
 
     return LLMTestCase(
-        input=trace.input,
-        retrieval_context=_retrieval_context(trace.retrieval),
+        input=input,
+        retrieval_context=_retrieval_context(retrieval),
     )
 
 
@@ -274,7 +287,7 @@ def _default_contextual_relevancy_metric(*, model: Any | None) -> Any:
         ContextualRelevancyMetric,
     )
 
-    return ContextualRelevancyMetric(model=model)
+    return ContextualRelevancyMetric(model=model, async_mode=False)
 
 
 class DeepEvalContextualRelevancyEvaluator:
@@ -282,7 +295,7 @@ class DeepEvalContextualRelevancyEvaluator:
 
     Returns metric="contextual_relevancy" and evaluator="deepeval".
     Does not apply DeepEval's threshold or metric.success.
-    Does not import RAGAS.
+    Does not import RAGAS. Does not read EvaluationTrace.
     """
 
     def __init__(
@@ -301,10 +314,13 @@ class DeepEvalContextualRelevancyEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        input: Any,
+        retrieval: list[Any] | None,
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_contextual_relevancy_test_case(trace)
+        test_case = _contextual_relevancy_llm_test_case(
+            input=input, retrieval=retrieval
+        )
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score
@@ -325,13 +341,15 @@ class DeepEvalContextualRelevancyEvaluator:
         ]
 
 
-def _trace_to_contextual_precision_test_case(trace: EvaluationTrace) -> Any:
+def _contextual_precision_llm_test_case(
+    *, input: Any, expected: Any, retrieval: list[Any] | None
+) -> Any:
     from deepeval.test_case import LLMTestCase
 
     return LLMTestCase(
-        input=trace.input,
-        expected_output=trace.expected,
-        retrieval_context=_retrieval_context(trace.retrieval),
+        input=input,
+        expected_output=expected,
+        retrieval_context=_retrieval_context(retrieval),
     )
 
 
@@ -340,7 +358,7 @@ def _default_contextual_precision_metric(*, model: Any | None) -> Any:
         ContextualPrecisionMetric,
     )
 
-    return ContextualPrecisionMetric(model=model)
+    return ContextualPrecisionMetric(model=model, async_mode=False)
 
 
 class DeepEvalContextualPrecisionEvaluator:
@@ -348,7 +366,7 @@ class DeepEvalContextualPrecisionEvaluator:
 
     Returns metric="contextual_precision" and evaluator="deepeval".
     Does not apply DeepEval's threshold or metric.success.
-    Does not import RAGAS.
+    Does not import RAGAS. Does not read EvaluationTrace.
     """
 
     def __init__(
@@ -367,10 +385,14 @@ class DeepEvalContextualPrecisionEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        input: Any,
+        expected: Any,
+        retrieval: list[Any] | None,
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_contextual_precision_test_case(trace)
+        test_case = _contextual_precision_llm_test_case(
+            input=input, expected=expected, retrieval=retrieval
+        )
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score
@@ -392,13 +414,15 @@ class DeepEvalContextualPrecisionEvaluator:
         ]
 
 
-def _trace_to_contextual_recall_test_case(trace: EvaluationTrace) -> Any:
+def _contextual_recall_llm_test_case(
+    *, input: Any, expected: Any, retrieval: list[Any] | None
+) -> Any:
     from deepeval.test_case import LLMTestCase
 
     return LLMTestCase(
-        input=trace.input,
-        expected_output=trace.expected,
-        retrieval_context=_retrieval_context(trace.retrieval),
+        input=input,
+        expected_output=expected,
+        retrieval_context=_retrieval_context(retrieval),
     )
 
 
@@ -407,7 +431,7 @@ def _default_contextual_recall_metric(*, model: Any | None) -> Any:
         ContextualRecallMetric,
     )
 
-    return ContextualRecallMetric(model=model)
+    return ContextualRecallMetric(model=model, async_mode=False)
 
 
 class DeepEvalContextualRecallEvaluator:
@@ -415,7 +439,7 @@ class DeepEvalContextualRecallEvaluator:
 
     Returns metric="contextual_recall" and evaluator="deepeval".
     Does not apply DeepEval's threshold or metric.success.
-    Does not import RAGAS.
+    Does not import RAGAS. Does not read EvaluationTrace.
     """
 
     def __init__(
@@ -434,10 +458,14 @@ class DeepEvalContextualRecallEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        input: Any,
+        expected: Any,
+        retrieval: list[Any] | None,
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_contextual_recall_test_case(trace)
+        test_case = _contextual_recall_llm_test_case(
+            input=input, expected=expected, retrieval=retrieval
+        )
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score
@@ -459,20 +487,22 @@ class DeepEvalContextualRecallEvaluator:
         ]
 
 
-def _trace_to_hallucination_test_case(trace: EvaluationTrace) -> Any:
+def _hallucination_llm_test_case(
+    *, input: Any, output: Any, retrieval: list[Any] | None
+) -> Any:
     from deepeval.test_case import LLMTestCase
 
     return LLMTestCase(
-        input=trace.input,
-        actual_output=trace.output,
-        context=_retrieval_context(trace.retrieval),
+        input=input,
+        actual_output=output,
+        context=_retrieval_context(retrieval),
     )
 
 
 def _default_hallucination_metric(*, model: Any | None) -> Any:
     from deepeval.metrics.hallucination.hallucination import HallucinationMetric
 
-    return HallucinationMetric(model=model)
+    return HallucinationMetric(model=model, async_mode=False)
 
 
 class DeepEvalHallucinationEvaluator:
@@ -482,7 +512,7 @@ class DeepEvalHallucinationEvaluator:
     DeepEval's score is the fraction of contexts the output agrees with.
     Higher means closer alignment, not a larger hallucination.
     Does not apply DeepEval's threshold or metric.success.
-    Does not import RAGAS.
+    Does not import RAGAS. Does not read EvaluationTrace.
     """
 
     def __init__(
@@ -501,10 +531,14 @@ class DeepEvalHallucinationEvaluator:
 
     def evaluate(
         self,
-        trace: EvaluationTrace,
+        input: Any,
+        output: Any,
+        retrieval: list[Any] | None,
         configuration: Any | None = None,
     ) -> list[EvaluationResult]:
-        test_case = _trace_to_hallucination_test_case(trace)
+        test_case = _hallucination_llm_test_case(
+            input=input, output=output, retrieval=retrieval
+        )
         metric = self._metric()
         metric.measure(test_case)
         score = metric.score

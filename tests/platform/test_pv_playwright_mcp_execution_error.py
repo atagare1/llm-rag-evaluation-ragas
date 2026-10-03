@@ -1,10 +1,11 @@
 """PV P0.3c: MCP tool isError=True is preserved; scenario is not successful.
 
 Focused live negative: force a real Playwright MCP tool failure, capture it
-through serialize → ToolInvocation → EvaluationTrace, and prove the scenario
+through serialize → ToolInvocation → request map, and prove the scenario
 is not reported as successful.
 
-Does not introduce a new evaluator, combined score, or platform abstraction.
+Execution health and final state are separate deterministic metrics alongside
+ToolCorrectness; no combined score or scenario abstraction.
 """
 
 from __future__ import annotations
@@ -12,12 +13,18 @@ from __future__ import annotations
 import shutil
 
 import pytest
+from deepeval.metrics.tool_correctness.tool_correctness import ToolCorrectnessMetric
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
 from ai_qe_eval.capture.mcp_trace import (
-    build_mcp_evaluation_trace,
+    mcp_p0_request,
     tool_invocation_from_observation,
+)
+from ai_qe_eval.domain.config import EvaluationConfig
+from ai_qe_eval.evaluators.deterministic import (
+    FINAL_STATE_METRIC,
+    MCP_EXECUTION_HEALTH_METRIC,
 )
 from ai_qe_eval.integrations.playwright_mcp import (
     PLAYWRIGHT_MCP_PACKAGE,
@@ -28,6 +35,9 @@ from ai_qe_eval.integrations.playwright_mcp import (
 
 from test_pv_playwright_mcp_multistep_tool_order_through_runner import (  # noqa: E402
     EXPECTED_TODO_TEXT,
+    P0_EVALUATIONS,
+    _final_state_contains_expected_todo,
+    _p0_runner,
     _resolve_snapshot_body,
 )
 
@@ -39,6 +49,7 @@ async def test_pv_playwright_mcp_execution_error_preserved_scenario_not_successf
         pytest.skip("npx is not available on PATH")
 
     goal = "Add Buy milk on TodoMVC (execution-error negative path)."
+    print("qe_supplied_input", goal)
     observed = []
 
     async with stdio_client(playwright_mcp_stdio_parameters()) as (
@@ -80,8 +91,7 @@ async def test_pv_playwright_mcp_execution_error_preserved_scenario_not_successf
             final_body = (
                 _resolve_snapshot_body(snap) if snap["isError"] is False else ""
             )
-            final_state_ok = EXPECTED_TODO_TEXT in final_body
-            print("final_state_ok", final_state_ok)
+            print("final_state_ok", EXPECTED_TODO_TEXT in final_body)
 
     assert any(
         isinstance(call.result, dict) and call.result.get("isError") is True
@@ -92,19 +102,16 @@ async def test_pv_playwright_mcp_execution_error_preserved_scenario_not_successf
         tool_invocation_from_observation(name=call.name, arguments=None, result=None)
         for call in observed
     ]
-    trace = build_mcp_evaluation_trace(
-        trace_id="pv-playwright-mcp-execution-error",
-        input=goal,
-        output="Playwright MCP flow stopped after a tool execution error.",
-        expected="Playwright MCP flow stopped after a tool execution error.",
+    request = mcp_p0_request(
         observed_tool_calls=observed,
         expected_tool_calls=expected_tool_calls,
+        final_state_ok=_final_state_contains_expected_todo(observed),
     )
 
-    # Failure preserved in existing trace / tool evidence.
+    # Failure preserved in captured tool evidence.
     error_calls = [
         call
-        for call in trace.turns[1].tool_calls
+        for call in observed
         if isinstance(call.result, dict) and call.result.get("isError") is True
     ]
     assert len(error_calls) >= 1
@@ -114,14 +121,32 @@ async def test_pv_playwright_mcp_execution_error_preserved_scenario_not_successf
     print("preserved_error_tool", error_calls[0].name)
     print("preserved_is_error", error_calls[0].result["isError"])
 
-    mcp_execution_ok = not any(
-        isinstance(call.result, dict) and call.result.get("isError") is True
-        for call in observed
+    metric = ToolCorrectnessMetric(
+        should_exact_match=True,
+        available_tools=None,
+        evaluation_params=[],
+        include_reason=True,
+        async_mode=False,
+        model=None,
     )
-    # Scenario success requires clean MCP execution and correct final state.
-    # ToolCorrectness is not claimed here; evidence is the captured isError.
-    scenario_task_succeeded = mcp_execution_ok and final_state_ok
-    print("mcp_execution_ok", mcp_execution_ok)
-    print("scenario_task_succeeded", scenario_task_succeeded)
-    assert mcp_execution_ok is False
-    assert scenario_task_succeeded is False
+    runner = _p0_runner(metric)
+    decision = runner.run(
+        request,
+        EvaluationConfig(evaluations=P0_EVALUATIONS),
+        run_id="pv-playwright-mcp-execution-error",
+    )
+
+    assert decision.passed is False
+    assert runner.last_run is not None
+    results = {result.metric: result for result in runner.last_run.results}
+    decisions = {item.metric: item for item in runner.last_run.decisions}
+    assert results["tool_correctness"].score == 1.0
+    assert results[FINAL_STATE_METRIC].score == 0.0
+    assert results[MCP_EXECUTION_HEALTH_METRIC].score == 0.0
+    assert decisions["tool_correctness"].passed is True
+    assert decisions[FINAL_STATE_METRIC].passed is False
+    assert decisions[MCP_EXECUTION_HEALTH_METRIC].passed is False
+    print("tool_correctness_score", results["tool_correctness"].score)
+    print("final_state_score", results[FINAL_STATE_METRIC].score)
+    print("mcp_execution_health_score", results[MCP_EXECUTION_HEALTH_METRIC].score)
+    print("gate_passed", decision.passed)
