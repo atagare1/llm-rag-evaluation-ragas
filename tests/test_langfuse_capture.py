@@ -13,12 +13,18 @@ from pathlib import Path
 import pytest
 
 from ai_qe_eval.capture.langfuse_trace import (
+    langfuse_chat_correctness_requests,
+    langfuse_chat_turn_relevancy_request,
+    langfuse_correctness_request,
     langfuse_tool_correctness_request,
+    observed_assistant_output,
+    observed_chat_turns,
     observed_tool_invocations,
+    observed_user_input,
     parse_observation_io,
     tool_invocation_from_langfuse_observation,
 )
-from ai_qe_eval.domain.conversation import ToolInvocation
+from ai_qe_eval.domain.conversation import ConversationTurn, ToolInvocation
 
 _CAPTURE_SOURCE = (
     Path(__file__).resolve().parents[1]
@@ -261,6 +267,331 @@ def test_datetime_start_times_sort_with_strings():
     ]
     calls = observed_tool_invocations(rows, trace_id="trace-1")
     assert [call.name for call in calls] == ["first", "second"]
+
+
+USER_PROMPT = (
+    "Collect UTC time, a public UUID, and httpbin json, then summarize all three."
+)
+FINAL_ANSWER = (
+    "I collected all three values successfully: the UTC clock API returned "
+    "the datetime and the slideshow title \"Sample Slide Show\"."
+)
+QE_EXPECTED = "Quote the UTC datetime, UUID, and Sample Slide Show from the tools."
+
+
+def _generation_row(
+    *,
+    obs_id: str,
+    start: str,
+    trace_id: str = "trace-1",
+    input_value: object,
+    output_value: object,
+) -> dict:
+    return {
+        "id": obs_id,
+        "type": "GENERATION",
+        "name": "generation",
+        "trace_id": trace_id,
+        "start_time": start,
+        "input": input_value,
+        "output": output_value,
+    }
+
+
+def _tool_call_generation(*, obs_id: str = "g1", start: str = "2026-10-03T10:21:48Z") -> dict:
+    return _generation_row(
+        obs_id=obs_id,
+        start=start,
+        input_value=[
+            {"role": "system", "content": "Call tools in order."},
+            {"role": "user", "content": USER_PROMPT},
+        ],
+        output_value=[
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-clock",
+                        "type": "function",
+                        "function": {
+                            "name": "fetch_timezone_clock",
+                            "arguments": '{"iana_timezone":"UTC"}',
+                        },
+                    }
+                ],
+            }
+        ],
+    )
+
+
+def _final_generation(*, obs_id: str = "g2", start: str = "2026-10-03T10:22:08Z") -> dict:
+    return _generation_row(
+        obs_id=obs_id,
+        start=start,
+        input_value=[
+            {"role": "system", "content": "Call tools in order."},
+            {"role": "user", "content": USER_PROMPT},
+        ],
+        output_value=[
+            {
+                "role": "assistant",
+                "content": FINAL_ANSWER,
+                "tool_calls": None,
+            }
+        ],
+    )
+
+
+def test_correctness_extracts_first_user_and_last_assistant_text():
+    rows = [
+        _final_generation(),
+        _tool_call_generation(),
+        _tool_row(
+            obs_id="clock",
+            name="fetch_timezone_clock",
+            start="2026-10-03T10:22:06Z",
+        ),
+    ]
+    request = langfuse_correctness_request(
+        observations=rows,
+        trace_id="trace-1",
+        expected=QE_EXPECTED,
+    )
+    assert request["correctness"]["args"] == [USER_PROMPT, FINAL_ANSWER, QE_EXPECTED]
+    assert "kwargs" not in request["correctness"]
+    assert observed_user_input(rows, trace_id="trace-1") == USER_PROMPT
+    assert observed_assistant_output(rows, trace_id="trace-1") == FINAL_ANSWER
+
+
+def test_correctness_uses_earliest_user_and_latest_assistant_by_start_time():
+    rows = [
+        _generation_row(
+            obs_id="later",
+            start="2026-10-03T10:22:10Z",
+            input_value=[{"role": "user", "content": "later question"}],
+            output_value=[{"role": "assistant", "content": "later answer"}],
+        ),
+        _generation_row(
+            obs_id="earlier",
+            start="2026-10-03T10:21:48Z",
+            input_value=[{"role": "user", "content": "earlier question"}],
+            output_value=[{"role": "assistant", "content": "earlier answer"}],
+        ),
+    ]
+    request = langfuse_correctness_request(
+        observations=rows,
+        trace_id="trace-1",
+        expected=QE_EXPECTED,
+    )
+    assert request["correctness"]["args"] == [
+        "earlier question",
+        "later answer",
+        QE_EXPECTED,
+    ]
+
+
+def test_tool_call_only_generation_is_not_assistant_text():
+    rows = [_tool_call_generation()]
+    assert observed_user_input(rows, trace_id="trace-1") == USER_PROMPT
+    assert observed_assistant_output(rows, trace_id="trace-1") is None
+    with pytest.raises(ValueError, match="final non-empty role=assistant"):
+        langfuse_correctness_request(
+            observations=rows,
+            trace_id="trace-1",
+            expected=QE_EXPECTED,
+        )
+    content_with_tools = _generation_row(
+        obs_id="g-tools-text",
+        start="2026-10-03T10:22:09Z",
+        input_value=[{"role": "user", "content": USER_PROMPT}],
+        output_value=[
+            {
+                "role": "assistant",
+                "content": "I will call tools now.",
+                "tool_calls": [{"id": "call-2", "type": "function"}],
+            }
+        ],
+    )
+    assert observed_assistant_output(
+        [_tool_call_generation(), content_with_tools],
+        trace_id="trace-1",
+    ) is None
+
+
+def test_missing_final_output_raises_even_when_user_input_exists():
+    rows = [
+        _generation_row(
+            obs_id="empty-out",
+            start="2026-10-03T10:22:08Z",
+            input_value=[{"role": "user", "content": USER_PROMPT}],
+            output_value=[{"role": "assistant", "content": "   ", "tool_calls": None}],
+        )
+    ]
+    with pytest.raises(ValueError, match="final non-empty role=assistant"):
+        langfuse_correctness_request(
+            observations=rows,
+            trace_id="trace-1",
+            expected=QE_EXPECTED,
+        )
+
+
+def test_correctness_expected_stays_qe_supplied():
+    rows = [_tool_call_generation(), _final_generation()]
+    request = langfuse_correctness_request(
+        observations=rows,
+        trace_id="trace-1",
+        expected=QE_EXPECTED,
+    )
+    assert request["correctness"]["args"][2] is QE_EXPECTED
+    assert FINAL_ANSWER not in QE_EXPECTED
+
+
+def _chat_root(
+    *,
+    obs_id: str,
+    start: str,
+    user_text: str,
+    assistant_text: str | None,
+    session_id: str = "session-1",
+    name: str = "handle-chat-message",
+    is_root: bool = True,
+    extra: dict | None = None,
+) -> dict:
+    row = {
+        "id": obs_id,
+        "type": "SPAN",
+        "name": name,
+        "session_id": session_id,
+        "start_time": start,
+        "is_root_observation": is_root,
+        "input": user_text,
+        "output": assistant_text,
+    }
+    if extra:
+        row.update(extra)
+    return row
+
+
+def test_chat_roots_map_two_turns_in_start_time_order():
+    rows = [
+        _chat_root(
+            obs_id="later",
+            start="2026-10-04T17:07:26Z",
+            user_text="How do I group several of those messages into one session?",
+            assistant_text="Use a session identifier.",
+        ),
+        {
+            "id": "generation",
+            "type": "GENERATION",
+            "name": "chat openai/gpt-4o-mini",
+            "session_id": "session-1",
+            "start_time": "2026-10-04T17:07:24Z",
+            "is_root_observation": False,
+            "input": [{"role": "user", "parts": [{"type": "text", "content": "ignored"}]}],
+            "output": [{"role": "assistant", "parts": [{"type": "text", "content": "ignored"}]}],
+        },
+        _chat_root(
+            obs_id="earlier",
+            start="2026-10-04T17:07:24Z",
+            user_text="What is Langfuse in one sentence?",
+            assistant_text="Langfuse is an observability platform.",
+        ),
+    ]
+    turns = observed_chat_turns(rows, session_id="session-1")
+    assert [(turn.role, turn.content) for turn in turns] == [
+        ("user", "What is Langfuse in one sentence?"),
+        ("assistant", "Langfuse is an observability platform."),
+        ("user", "How do I group several of those messages into one session?"),
+        ("assistant", "Use a session identifier."),
+    ]
+
+
+def test_chat_roots_ignore_non_root_and_other_names():
+    rows = [
+        _chat_root(
+            obs_id="nested-same-name",
+            start="2026-10-04T17:07:24Z",
+            user_text="nested",
+            assistant_text="should not count",
+            is_root=False,
+        ),
+        _chat_root(
+            obs_id="other-name",
+            start="2026-10-04T17:07:25Z",
+            user_text="other",
+            assistant_text="should not count",
+            name="invoke_agent openai/gpt-4o-mini",
+        ),
+        _chat_root(
+            obs_id="root",
+            start="2026-10-04T17:07:26Z",
+            user_text="What is Langfuse in one sentence?",
+            assistant_text="Langfuse is an observability platform.",
+        ),
+    ]
+    turns = observed_chat_turns(rows, session_id="session-1")
+    assert [turn.content for turn in turns] == [
+        "What is Langfuse in one sentence?",
+        "Langfuse is an observability platform.",
+    ]
+
+
+def test_chat_root_missing_output_raises():
+    rows = [
+        _chat_root(
+            obs_id="incomplete",
+            start="2026-10-04T17:07:24Z",
+            user_text="What is Langfuse in one sentence?",
+            assistant_text=None,
+        )
+    ]
+    with pytest.raises(ValueError, match="missing a non-empty output"):
+        observed_chat_turns(rows, session_id="session-1")
+
+
+def test_chat_request_shapes_for_turn_relevancy_and_per_turn_geval():
+    rows = [
+        _chat_root(
+            obs_id="t1",
+            start="2026-10-04T17:07:24Z",
+            user_text="What is Langfuse in one sentence?",
+            assistant_text="Langfuse is an observability platform.",
+        ),
+        _chat_root(
+            obs_id="t2",
+            start="2026-10-04T17:07:26Z",
+            user_text="How do I group several of those messages into one session?",
+            assistant_text="Use a session identifier.",
+        ),
+    ]
+    turn_request = langfuse_chat_turn_relevancy_request(
+        observations=rows,
+        session_id="session-1",
+    )
+    turns = turn_request["turn_relevancy"]["args"][0]
+    assert "kwargs" not in turn_request["turn_relevancy"]
+    assert [turn.role for turn in turns] == ["user", "assistant", "user", "assistant"]
+    assert all(isinstance(turn, ConversationTurn) for turn in turns)
+
+    correctness_requests = langfuse_chat_correctness_requests(
+        observations=rows,
+        session_id="session-1",
+        expected=QE_EXPECTED,
+    )
+    assert [request["correctness"]["args"] for request in correctness_requests] == [
+        [
+            "What is Langfuse in one sentence?",
+            "Langfuse is an observability platform.",
+            QE_EXPECTED,
+        ],
+        [
+            "How do I group several of those messages into one session?",
+            "Use a session identifier.",
+            QE_EXPECTED,
+        ],
+    ]
+    assert correctness_requests[0]["correctness"]["args"][2] is QE_EXPECTED
 
 
 def test_capture_module_does_not_import_vendor_sdks():

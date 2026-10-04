@@ -1,36 +1,22 @@
 """PV-F: one live DeepEval G-Eval correctness call.
 
-Uses the installed DeepEval 4.2.6 LocalModel, which is the OpenAI-compatible
-client that accepts an explicit model name and base URL. The evaluator's
-model= argument receives that object. Credentials come from the existing
-OPENAI_API_KEY and OPENAI_BASE_URL environment values.
+Uses the installed DeepEval 4.2.6 LocalModel. The evaluator's model=
+argument receives that object. Credentials come from OPENROUTER_API_KEY
+and OPENAI_BASE_URL. The judge model is DEEPEVAL_JUDGE_MODEL or the
+OpenRouter default.
 """
 
 import math
-import os
 
 import pytest
-from deepeval.models.llms.local_model import LocalModel
-
+from deepeval_live import deepeval_judge_model_name, live_deepeval_local_model
 from ai_qe_eval.evaluators.deepeval import DeepEvalGEvalCorrectnessEvaluator
-
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-
 
 @pytest.mark.live
 def test_pv_f_deepeval_geval_smoke_returns_numeric_score():
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not base_url:
-        pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    model = LocalModel(
-        model=SMOKE_JUDGE_MODEL,
-        api_key=api_key,
-        base_url=base_url,
-        temperature=0,
-    )
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    model = live_deepeval_local_model()
+    print("provider_model", deepeval_judge_model_name())
 
     results = DeepEvalGEvalCorrectnessEvaluator(model=model).evaluate(
         "What is 2 + 2?",

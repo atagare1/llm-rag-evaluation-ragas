@@ -1,6 +1,6 @@
 """DeepEval evaluator adapters.
 
-Each adapter maps caller-supplied evidence into DeepEval 2.7.0 LLMTestCase
+Each adapter maps caller-supplied evidence into DeepEval 4.2.6 LLMTestCase
 fields and metric.measure. Does not read EvaluationTrace.
 
 Evaluator identity is "deepeval". Does not apply framework thresholds or
@@ -44,14 +44,14 @@ def _default_geval_metric(
     evaluation_steps: list[str] | None,
 ) -> Any:
     from deepeval.metrics.g_eval.g_eval import GEval
-    from deepeval.test_case.llm_test_case import LLMTestCaseParams
+    from deepeval.test_case import SingleTurnParams
 
     kwargs: dict[str, Any] = {
         "name": DEFAULT_GEVAL_NAME,
         "evaluation_params": [
-            LLMTestCaseParams.INPUT,
-            LLMTestCaseParams.ACTUAL_OUTPUT,
-            LLMTestCaseParams.EXPECTED_OUTPUT,
+            SingleTurnParams.INPUT,
+            SingleTurnParams.ACTUAL_OUTPUT,
+            SingleTurnParams.EXPECTED_OUTPUT,
         ],
         "model": model,
         "async_mode": False,

@@ -1,14 +1,13 @@
 """Second live RAGAS faithfulness smoke with an injected judge model.
 
 Reuses Phase 1 faithfulness test data and the get_test_data fixture.
-The judge is the previously measured process-env model, passed only into
-this test's RAGASFaithfulnessEvaluator. File defaults stay Mixtral.
+The judge is RAGAS_LLM_MODEL or the OpenRouter Llama default, passed only
+into this test's RAGASFaithfulnessEvaluator. File defaults stay Mixtral.
 """
 
 import math
 
 import pytest
-from langchain_openai import ChatOpenAI
 from ragas.llms import LangchainLLMWrapper
 
 from ai_qe_eval.evaluators.ragas import (
@@ -16,9 +15,8 @@ from ai_qe_eval.evaluators.ragas import (
     RAGAS_EVALUATOR_NAME,
     RAGASFaithfulnessEvaluator,
 )
+from ragas_live import live_ragas_llama_chat, ragas_llama_judge_model_name
 from utils import read_test_data
-
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 
 
 @pytest.mark.live
@@ -29,9 +27,9 @@ SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 )
 def test_ragas_faithfulness_smoke_with_llama_judge(get_test_data):
     sample = get_test_data
-    llm = ChatOpenAI(model=SMOKE_JUDGE_MODEL, temperature=0)
+    llm = live_ragas_llama_chat()
     wrapper = LangchainLLMWrapper(llm)
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    print("provider_model", ragas_llama_judge_model_name())
 
     results = RAGASFaithfulnessEvaluator(llm=wrapper).evaluate(
         sample.user_input,

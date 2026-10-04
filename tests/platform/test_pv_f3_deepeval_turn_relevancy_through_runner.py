@@ -1,6 +1,6 @@
 """PV-F3: one live turn relevancy result through the real EvaluationRunner.
 
-Uses the same Together LocalModel as the turn relevancy smoke. The platform
+Uses the same OpenRouter LocalModel as the turn relevancy smoke. The platform
 gate is an explicit QualityPolicy of turn_relevancy >= 0.80, matching the
 numeric convention used for correctness and answer relevancy. DeepEval's own
 threshold is not the gate. This key is not added to the historical RAG
@@ -8,11 +8,9 @@ threshold map.
 """
 
 import math
-import os
 
 import pytest
-from deepeval.models.llms.local_model import LocalModel
-
+from deepeval_live import deepeval_judge_model_name, live_deepeval_local_model
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.conversation import ConversationTurn
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
@@ -21,16 +19,10 @@ from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 TURN_RELEVANCY_THRESHOLD = 0.80
-
 
 @pytest.mark.live
 def test_pv_f3_deepeval_turn_relevancy_through_runner():
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not base_url:
-        pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
     turns = [
         ConversationTurn(role="user", content="What is 2 + 2?"),
@@ -44,12 +36,7 @@ def test_pv_f3_deepeval_turn_relevancy_through_runner():
             "kwargs": {},
         }
     }
-    model = LocalModel(
-        model=SMOKE_JUDGE_MODEL,
-        api_key=api_key,
-        base_url=base_url,
-        temperature=0,
-    )
+    model = live_deepeval_local_model()
     registry = EvaluationRegistry()
     registry.register(
         EvaluationCapability(
@@ -72,7 +59,7 @@ def test_pv_f3_deepeval_turn_relevancy_through_runner():
         gate=QualityGate(),
     )
     config = EvaluationConfig(evaluations=["turn_relevancy"])
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    print("provider_model", deepeval_judge_model_name())
     print("policy_threshold", policy.threshold)
 
     decision = runner.run(request, config, run_id="pv-f3-turn-relevancy")

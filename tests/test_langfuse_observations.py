@@ -20,8 +20,11 @@ from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.integrations.langfuse_observations import (
     LangfuseTraceIncompleteError,
     fetch_observation_pages,
+    fetch_session_observation_pages,
     flush_langfuse_client,
     get_observations_for_trace,
+    has_final_assistant_generation,
+    ingest_langfuse_correctness,
     ingest_langfuse_trace,
     min_tool_observations,
     wait_for_settled_observations,
@@ -129,6 +132,41 @@ def test_fetch_observation_pages_walks_cursor_until_exhausted():
     assert client.api.observations.calls[0]["cursor"] is None
     assert client.api.observations.calls[1]["cursor"] == "1"
     assert client.api.observations.calls[2]["limit"] == 1
+
+
+def test_fetch_session_observation_pages_uses_session_id_and_io_fields():
+    pages = [
+        [
+            {
+                "id": "root-1",
+                "type": "SPAN",
+                "name": "handle-chat-message",
+                "session_id": "session-1",
+                "is_root_observation": True,
+            }
+        ],
+        [
+            {
+                "id": "gen-1",
+                "type": "GENERATION",
+                "name": "chat openai/gpt-4o-mini",
+                "session_id": "session-1",
+            }
+        ],
+    ]
+    client = _FakeClient(pages)
+    start = datetime(2026, 10, 4, tzinfo=timezone.utc)
+    rows = fetch_session_observation_pages(
+        client,
+        session_id="session-1",
+        from_start_time=start,
+        to_start_time=start,
+        page_limit=1,
+    )
+    assert [row["id"] for row in rows] == ["root-1", "gen-1"]
+    assert client.api.observations.calls[0]["session_id"] == "session-1"
+    assert "trace_id" not in client.api.observations.calls[0]
+    assert "io" in client.api.observations.calls[0]["fields"].split(",")
 
 
 def test_wait_for_settled_observations_polls_until_complete():
@@ -304,6 +342,100 @@ def test_ingest_langfuse_request_through_runner_policy_and_gate():
     assert runner.last_run.results[0].score == 0.91
     assert runner.last_run.decisions[0].passed is True
     assert clock.sleeps == [0.2]
+
+
+def _tool_call_generation_row() -> dict:
+    return {
+        "id": "g1",
+        "type": "GENERATION",
+        "trace_id": "t",
+        "name": "generation",
+        "start_time": "2026-10-03T10:21:48Z",
+        "input": [{"role": "user", "content": "Collect UTC time."}],
+        "output": [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"id": "call-1", "type": "function"}],
+            }
+        ],
+    }
+
+
+def _final_generation_row() -> dict:
+    return {
+        "id": "g2",
+        "type": "GENERATION",
+        "trace_id": "t",
+        "name": "generation",
+        "start_time": "2026-10-03T10:22:10Z",
+        "input": [{"role": "user", "content": "Collect UTC time."}],
+        "output": [
+            {
+                "role": "assistant",
+                "content": "UTC time collected.",
+                "tool_calls": None,
+            }
+        ],
+    }
+
+
+class _GrowingCorrectnessClient:
+    """First pass has tools and a tool-call GENERATION; later adds final text."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.api = type("API", (), {})()
+        self.api.observations = self
+
+    def get_many(self, **kwargs):
+        self.calls += 1
+        cursor = kwargs.get("cursor")
+        first_page = [
+            {"id": "1", "type": "TOOL", "trace_id": "t", "name": "a"},
+            _tool_call_generation_row(),
+        ]
+        if self.calls <= 1:
+            if cursor is None:
+                return {"data": first_page, "meta": {"cursor": None}}
+            return {"data": [], "meta": {"cursor": None}}
+        if cursor is None:
+            return {
+                "data": first_page + [_final_generation_row()],
+                "meta": {"cursor": None},
+            }
+        return {"data": [], "meta": {"cursor": None}}
+
+
+def test_has_final_assistant_generation_ignores_tool_call_only_rows():
+    predicate = has_final_assistant_generation("t")
+    assert predicate([_tool_call_generation_row()]) is False
+    assert predicate([_tool_call_generation_row(), _final_generation_row()]) is True
+
+
+def test_ingest_langfuse_correctness_waits_for_final_assistant_text():
+    client = _GrowingCorrectnessClient()
+    clock = _FakeClock()
+    start = datetime(2026, 10, 2, tzinfo=timezone.utc)
+    request = ingest_langfuse_correctness(
+        client=client,
+        trace_id="t",
+        expected="QE expected remains caller-supplied.",
+        from_start_time=start,
+        to_start_time=start,
+        timeout_s=5.0,
+        poll_interval_s=0.2,
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+    )
+    assert set(request) == {"correctness"}
+    assert request["correctness"]["args"] == [
+        "Collect UTC time.",
+        "UTC time collected.",
+        "QE expected remains caller-supplied.",
+    ]
+    assert clock.sleeps == [0.2]
+    assert client.calls == 2
 
 
 def test_langfuse_observations_module_does_not_import_evaluation_trace():

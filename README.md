@@ -201,9 +201,11 @@ Deterministic baseline from `python -m pytest tests -q` (MVP-03, not re-measured
 
 **361 passed, 32 live tests deselected, 2 warnings.**
 
-`pytest.ini` sets `-m "not live"` and `-p no:deepeval`. The two warnings are existing DeepEval deprecations (`LLMTestCaseParams`; `HallucinationMetric` score-direction notice), not CLI or demo failures.
+`pytest.ini` sets `-m "not live"` and `-p no:deepeval`. DeepEval is pinned at 4.2.6. A remaining DeepEval `HallucinationMetric` score-direction notice is informational; platform hallucination scoring is already higher-is-better with policy `>= 0.8`.
 
 Live tests (Playwright MCP, Langfuse, RAGAS/DeepEval provider runs) exist under `tests/platform/` and are excluded from that baseline. Do not treat the deterministic count as live-provider proof.
+
+Live DeepEval judges use `OPENROUTER_API_KEY`, `OPENAI_BASE_URL` (OpenRouter), and optional `DEEPEVAL_JUDGE_MODEL` (default `meta-llama/llama-3.3-70b-instruct`). RAGAS defaults are unchanged.
 
 ```bash
 pytest tests -q          # deterministic baseline

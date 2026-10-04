@@ -1,8 +1,10 @@
 """Langfuse Observations API v2 retrieval boundary.
 
-Paginates langfuse.api.observations.get_many for one trace_id and returns
-plain observation mappings. ingest_langfuse_trace settles, then builds a
-ToolCorrectness request map.
+Paginates langfuse.api.observations.get_many for one trace_id or
+session_id and returns plain observation mappings. ingest_langfuse_trace
+settles, then builds a ToolCorrectness request map.
+ingest_langfuse_correctness settles until a final assistant GENERATION
+is present, then builds a G-Eval Correctness request map.
 
 Does not import the OpenAI Agents SDK, Langfuse SDK, evaluators, Runner,
 Policy, or Gate. The client is injected. Does not use langfuse.trace() or
@@ -16,7 +18,11 @@ from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from ai_qe_eval.capture.langfuse_trace import langfuse_tool_correctness_request
+from ai_qe_eval.capture.langfuse_trace import (
+    langfuse_correctness_request,
+    langfuse_tool_correctness_request,
+    observed_assistant_output,
+)
 from ai_qe_eval.domain.conversation import ToolInvocation
 
 DEFAULT_PAGE_LIMIT = 50
@@ -107,6 +113,21 @@ def min_tool_observations(min_count: int) -> SettlePredicate:
     return is_complete
 
 
+def has_final_assistant_generation(trace_id: str | None = None) -> SettlePredicate:
+    """Settle when a GENERATION row has non-empty assistant text.
+
+    Tool-call-only assistant outputs do not satisfy this predicate.
+    """
+
+    def is_complete(rows: list[dict[str, Any]]) -> bool:
+        try:
+            return observed_assistant_output(rows, trace_id=trace_id) is not None
+        except (TypeError, ValueError):
+            return False
+
+    return is_complete
+
+
 def flush_langfuse_client(client: Any) -> bool:
     """Flush if the injected client exposes flush(). Does not import Langfuse."""
     flush = getattr(client, "flush", None)
@@ -132,6 +153,42 @@ def fetch_observation_pages(
     for _ in range(50):
         payload = client.api.observations.get_many(
             trace_id=trace_id,
+            fields=fields,
+            from_start_time=from_start_time,
+            to_start_time=to_start_time,
+            limit=page_limit,
+            cursor=cursor,
+        )
+        page_rows = _observation_rows(payload)
+        rows.extend(page_rows)
+        next_cursor = _payload_cursor(payload)
+        if not next_cursor:
+            break
+        if next_cursor in seen_cursors:
+            break
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+        if not page_rows:
+            break
+    return rows
+
+
+def fetch_session_observation_pages(
+    client: Any,
+    *,
+    session_id: str,
+    from_start_time: datetime,
+    to_start_time: datetime,
+    page_limit: int = DEFAULT_PAGE_LIMIT,
+    fields: str = OBSERVATION_FIELDS,
+) -> list[dict[str, Any]]:
+    """Retrieve every observation page for one session_id."""
+    rows: list[dict[str, Any]] = []
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    for _ in range(50):
+        payload = client.api.observations.get_many(
+            session_id=session_id,
             fields=fields,
             from_start_time=from_start_time,
             to_start_time=to_start_time,
@@ -285,4 +342,41 @@ def ingest_langfuse_trace(
         observations=observations,
         trace_id=trace_id,
         expected_tool_calls=expected_tool_calls,
+    )
+
+
+def ingest_langfuse_correctness(
+    *,
+    client: Any,
+    trace_id: str,
+    expected: Any,
+    from_start_time: datetime,
+    is_complete: SettlePredicate | None = None,
+    to_start_time: datetime | None = None,
+    page_limit: int = DEFAULT_PAGE_LIMIT,
+    timeout_s: float = DEFAULT_SETTLE_TIMEOUT_S,
+    poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
+    sleep: SleepFn = time.sleep,
+    monotonic: MonotonicFn = time.monotonic,
+) -> dict[str, dict[str, list[Any]]]:
+    """Settle until final assistant text exists, then build a Correctness map.
+
+    expected remains QE-supplied and is never inferred from Langfuse.
+    """
+    observations = wait_for_settled_observations(
+        client,
+        trace_id,
+        from_start_time=from_start_time,
+        to_start_time=to_start_time,
+        page_limit=page_limit,
+        is_complete=is_complete or has_final_assistant_generation(trace_id),
+        timeout_s=timeout_s,
+        poll_interval_s=poll_interval_s,
+        sleep=sleep,
+        monotonic=monotonic,
+    )
+    return langfuse_correctness_request(
+        observations=observations,
+        trace_id=trace_id,
+        expected=expected,
     )

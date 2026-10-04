@@ -1,17 +1,15 @@
 """PV-F2: one live DeepEval answer relevancy result through the real EvaluationRunner.
 
 Uses the known-good trace from the DeepEval Answer Relevancy smoke and the same
-Together LocalModel. The policy is the existing answer relevancy rule:
+OpenRouter LocalModel. The policy is the existing answer relevancy rule:
 answer_relevancy >= metric_threshold("answer_relevancy"), default 0.8.
 DeepEval's own threshold is not the platform gate.
 """
 
 import math
-import os
 
 import pytest
-from deepeval.models.llms.local_model import LocalModel
-
+from deepeval_live import deepeval_judge_model_name, live_deepeval_local_model
 from ai_qe_eval.domain.config import EvaluationConfig
 from ai_qe_eval.domain.registry import EvaluationCapability, EvaluationRegistry
 from ai_qe_eval.evaluators.deepeval import DeepEvalAnswerRelevancyEvaluator
@@ -20,24 +18,13 @@ from ai_qe_eval.policy.quality_policy import QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
 from utils import metric_threshold
 
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-
 @pytest.mark.live
 def test_pv_f2_deepeval_answer_relevancy_through_runner():
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not base_url:
-        pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
     request = {
         "answer_relevancy": {"args": ["What is 2 + 2?", "4"], "kwargs": {}},
     }
-    model = LocalModel(
-        model=SMOKE_JUDGE_MODEL,
-        api_key=api_key,
-        base_url=base_url,
-        temperature=0,
-    )
+    model = live_deepeval_local_model()
     registry = EvaluationRegistry()
     registry.register(
         EvaluationCapability(
@@ -60,7 +47,7 @@ def test_pv_f2_deepeval_answer_relevancy_through_runner():
         gate=QualityGate(),
     )
     config = EvaluationConfig(evaluations=["answer_relevancy"])
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    print("provider_model", deepeval_judge_model_name())
     print("policy_threshold", policy.threshold)
 
     decision = runner.run(request, config)

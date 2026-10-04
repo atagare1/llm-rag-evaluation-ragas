@@ -1,36 +1,22 @@
 """Live DeepEval Hallucination smoke.
 
-Uses the same Together LocalModel as the other DeepEval smokes. Calls
+Uses the same OpenRouter LocalModel as the other DeepEval smokes. Calls
 DeepEvalHallucinationEvaluator directly. Does not apply a quality threshold.
 
 DeepEval 4.2.6 scores alignment: 1 means the output agrees with the context.
 """
 
 import math
-import os
 
 import pytest
-from deepeval.models.llms.local_model import LocalModel
-
+from deepeval_live import deepeval_judge_model_name, live_deepeval_local_model
 from ai_qe_eval.evaluators.deepeval import DeepEvalHallucinationEvaluator
-
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-
 
 @pytest.mark.live
 def test_pv_f_deepeval_hallucination_smoke_returns_numeric_score():
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not base_url:
-        pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    model = LocalModel(
-        model=SMOKE_JUDGE_MODEL,
-        api_key=api_key,
-        base_url=base_url,
-        temperature=0,
-    )
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    model = live_deepeval_local_model()
+    print("provider_model", deepeval_judge_model_name())
 
     results = DeepEvalHallucinationEvaluator(model=model).evaluate(
         "What is the capital of France?",

@@ -1,6 +1,6 @@
 """PV-F4: one live tool correctness result through QualityPolicy and QualityGate.
 
-Uses the same Together LocalModel as the tool correctness smoke. The platform
+Uses the same OpenRouter LocalModel as the tool correctness smoke. The platform
 gate is an explicit QualityPolicy of tool_correctness >= 0.80. DeepEval's own
 threshold is not the gate. tool_correctness is not added to the historical
 RAG threshold map. EvaluationRunner is not used because ToolCorrectness no
@@ -8,19 +8,15 @@ longer accepts EvaluationTrace.
 """
 
 import math
-import os
 
 import pytest
-from deepeval.models.llms.local_model import LocalModel
-
+from deepeval_live import deepeval_judge_model_name, live_deepeval_local_model
 from ai_qe_eval.domain.conversation import ToolInvocation
 from ai_qe_eval.evaluators.deepeval_tool_correctness import DeepEvalToolCorrectnessEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
 
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 TOOL_CORRECTNESS_THRESHOLD = 0.80
-
 
 def _weather() -> ToolInvocation:
     return ToolInvocation(
@@ -29,26 +25,16 @@ def _weather() -> ToolInvocation:
         result="Temperature is 28 C and conditions are clear.",
     )
 
-
 @pytest.mark.live
 def test_pv_f4_deepeval_tool_correctness_through_runner():
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not base_url:
-        pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
-    model = LocalModel(
-        model=SMOKE_JUDGE_MODEL,
-        api_key=api_key,
-        base_url=base_url,
-        temperature=0,
-    )
+    model = live_deepeval_local_model()
     policy = QualityPolicy(
         metric="tool_correctness",
         operator=">=",
         threshold=TOOL_CORRECTNESS_THRESHOLD,
     )
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    print("provider_model", deepeval_judge_model_name())
     print("policy_threshold", policy.threshold)
 
     result = DeepEvalToolCorrectnessEvaluator(model=model).evaluate(

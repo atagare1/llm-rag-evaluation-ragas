@@ -1,28 +1,19 @@
 """PV-F: one live DeepEval turn relevancy call.
 
-Uses the installed DeepEval LocalModel and Together Llama 3.3 70B Instruct Turbo.
-Credentials come from OPENAI_API_KEY and OPENAI_BASE_URL.
+Uses the installed DeepEval LocalModel and the shared OpenRouter judge.
+Credentials come from OPENROUTER_API_KEY and OPENAI_BASE_URL.
 The conversation ends on an assistant turn so DeepEval's unit grouping keeps it.
 """
 
 import math
-import os
 
 import pytest
-from deepeval.models.llms.local_model import LocalModel
-
+from deepeval_live import deepeval_judge_model_name, live_deepeval_local_model
 from ai_qe_eval.domain.conversation import ConversationTurn
 from ai_qe_eval.evaluators.deepeval_turn_relevancy import DeepEvalTurnRelevancyEvaluator
 
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-
-
 @pytest.mark.live
 def test_pv_f_deepeval_turn_relevancy_smoke_returns_numeric_score():
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not base_url:
-        pytest.skip("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
 
     turns = [
         ConversationTurn(role="user", content="What is 2 + 2?"),
@@ -30,13 +21,8 @@ def test_pv_f_deepeval_turn_relevancy_smoke_returns_numeric_score():
         ConversationTurn(role="user", content="What is 3 + 3?"),
         ConversationTurn(role="assistant", content="3 + 3 is 6."),
     ]
-    model = LocalModel(
-        model=SMOKE_JUDGE_MODEL,
-        api_key=api_key,
-        base_url=base_url,
-        temperature=0,
-    )
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    model = live_deepeval_local_model()
+    print("provider_model", deepeval_judge_model_name())
 
     results = DeepEvalTurnRelevancyEvaluator(model=model).evaluate(turns)
 

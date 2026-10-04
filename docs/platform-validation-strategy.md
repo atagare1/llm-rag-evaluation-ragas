@@ -181,9 +181,7 @@ If Mixtral remains unavailable: keep Layer E skipped; record `LIVE PROVIDER E2E:
 
 ### Layer F — Live DeepEval GEval (optional)
 
-**Status today:** NOT RUN. Environment constraint: DeepEval 2.7.0 vs frozen RAGAS/OpenAI stack; pytest plugin disabled.
-
-Treat as **DEFERRED** until a isolated extra env exists. Do not `pip install --upgrade deepeval` as part of validation.
+**Status today:** pin is `deepeval==4.2.6` (controlled compatibility experiment). Pytest plugin remains disabled (`-p no:deepeval`). Live Layer F tests stay `live`-marked. The live DeepEval judge is OpenRouter `meta-llama/llama-3.3-70b-instruct` via `DEEPEVAL_JUDGE_MODEL` / `OPENROUTER_API_KEY` / `OPENAI_BASE_URL`.
 
 ### Layer G — Phase 1 live suite (historical)
 

@@ -1,0 +1,1250 @@
+{
+  "spike": "langfuse_user_feedback_two_turn",
+  "official_example": "https://github.com/langfuse/langfuse-examples/tree/main/applications/user-feedback",
+  "retrieval_api": "langfuse.api.observations.get_many",
+  "retrieval_query_mode": "session_id_kwarg",
+  "pagination": {
+    "page_limit": 50,
+    "page_count": 1,
+    "pages": [
+      {
+        "page": 1,
+        "row_count": 8,
+        "supplied_cursor": false,
+        "next_cursor_present": false,
+        "ids": [
+          "977587d6768184c4",
+          "ff9c960783ae10e9",
+          "a213088e88c097e2",
+          "550e0847b502248a",
+          "8861596f9d2fbf61",
+          "eb6890d16c711b6d",
+          "177fd55b5e8cd46f",
+          "a3f3df3b8acbef4d"
+        ]
+      }
+    ]
+  },
+  "deprecated_apis_used": [],
+  "session_id": "39be2d586e4b40ff8868b51e84d72470",
+  "chat_base_url": "http://127.0.0.1:3000",
+  "posted_turns": [
+    {
+      "turn": 1,
+      "user_text": "What is Langfuse in one sentence?",
+      "http": {
+        "raw_chars": 2223,
+        "raw_preview": "data: {\"type\":\"start\",\"messageId\":\"8635e9752c8efa9b3c6c1b2d035f6827\"}\n\ndata: {\"type\":\"start-step\"}\n\ndata: {\"type\":\"text-start\",\"id\":\"msg_tmp_ka5uxvak7x\",\"providerMetadata\":{\"openai\":{\"itemId\":\"msg_tmp_ka5uxvak7x\"}}}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\"Lang\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\"f\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\"use\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" is\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" a\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" platform\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" designed\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" to\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" help\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" developers\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" and\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" businesses\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" integrate\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" and\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" analyze\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" the\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" performance\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" of\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" language\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" models\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" and\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" AI\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\"-driven\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7x\",\"delta\":\" applications\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_ka5uxvak7",
+        "parsed_event_count": 31,
+        "message_ids": [
+          "8635e9752c8efa9b3c6c1b2d035f6827",
+          "msg_tmp_ka5uxvak7x"
+        ],
+        "assistant_text": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications.",
+        "event_types": [
+          "start",
+          "start-step",
+          "text-start",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-end",
+          "finish-step",
+          "finish"
+        ],
+        "http_status": 200,
+        "duration_s": 4.531,
+        "response_headers": {
+          "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+          "cache-control": "no-cache",
+          "connection": "keep-alive",
+          "content-type": "text/event-stream",
+          "x-accel-buffering": "no",
+          "x-vercel-ai-ui-message-stream": "v1",
+          "Date": "Sun, 04 Oct 2026 17:07:24 GMT",
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "error": null
+    },
+    {
+      "turn": 2,
+      "user_text": "How do I group several of those messages into one session?",
+      "http": {
+        "raw_chars": 9973,
+        "raw_preview": "data: {\"type\":\"start\",\"messageId\":\"4f697b8c9c9e2f7522ecb3e2fdab8087\"}\n\ndata: {\"type\":\"start-step\"}\n\ndata: {\"type\":\"text-start\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"providerMetadata\":{\"openai\":{\"itemId\":\"msg_tmp_sv1vdd9kjw\"}}}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\"To\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" group\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" several\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" messages\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" into\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" one\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" session\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" in\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" Lang\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\"f\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\"use\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\",\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" you\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" typically\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" need\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" to\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" use\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" a\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" session\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" identifier\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" (\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\"session\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" ID\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\")\"}\n\ndata: {\"type\":\"text-delta\",\"id\":\"msg_tmp_sv1vdd9kjw\",\"delta\":\" that\"}\n\ndata: {\"type\"",
+        "parsed_event_count": 140,
+        "message_ids": [
+          "4f697b8c9c9e2f7522ecb3e2fdab8087",
+          "msg_tmp_sv1vdd9kjw"
+        ],
+        "assistant_text": "To group several messages into one session in Langfuse, you typically need to use a session identifier (session ID) that associates multiple messages with the same user interaction or event. This involves:\n\n1. Generating a unique session ID for each user or interaction session.\n2. Including this session ID in the metadata of each incoming message or event you want to group together.\n3. Ensuring that all relevant messages share the same session ID, allowing you to view and analyze them collectively as part of a single session.\n\nPlease refer to the Langfuse documentation for specific API calls or SDK methods related to session management, as implementation details may vary based on your setup.",
+        "event_types": [
+          "start",
+          "start-step",
+          "text-start",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-delta",
+          "text-end",
+          "finish-step",
+          "finish"
+        ],
+        "http_status": 200,
+        "duration_s": 2.563,
+        "response_headers": {
+          "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+          "cache-control": "no-cache",
+          "connection": "keep-alive",
+          "content-type": "text/event-stream",
+          "x-accel-buffering": "no",
+          "x-vercel-ai-ui-message-stream": "v1",
+          "Date": "Sun, 04 Oct 2026 17:07:26 GMT",
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "error": null
+    }
+  ],
+  "query_error": null,
+  "observation_count": 8,
+  "observations": [
+    {
+      "id": "a3f3df3b8acbef4d",
+      "type": "SPAN",
+      "name": "handle-chat-message",
+      "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "b1821f718fb7f359",
+      "start_time": "2026-10-04T17:07:24.270000+00:00",
+      "end_time": "2026-10-04T17:07:26.614000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": true,
+      "input": "What is Langfuse in one sentence?",
+      "output": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications.",
+      "metadata": {
+        "scope.version": "5.11.1",
+        "scope.name": "langfuse-sdk",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    },
+    {
+      "id": "177fd55b5e8cd46f",
+      "type": "AGENT",
+      "name": "invoke_agent openai/gpt-4o-mini",
+      "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "a3f3df3b8acbef4d",
+      "start_time": "2026-10-04T17:07:24.337000+00:00",
+      "end_time": "2026-10-04T17:07:26.615000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": null,
+      "input": [
+        {
+          "role": "system",
+          "content": "You are a helpful Langfuse assistant. Help the user with their questions about Langfuse."
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "content": "What is Langfuse in one sentence?"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "content": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications."
+            }
+          ],
+          "finish_reason": "stop"
+        }
+      ],
+      "metadata": {
+        "scope.name": "gen_ai",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe",
+        "attributes.gen_ai.usage.cache_read.input_tokens": "[redacted]",
+        "attributes.gen_ai.usage.output_tokens": "[redacted]",
+        "attributes.gen_ai.usage.input_tokens": "[redacted]",
+        "attributes.gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "attributes.langfuse.trace.name": "langfuse-chatbot",
+        "attributes.session.id": "39be2d586e4b40ff8868b51e84d72470",
+        "attributes.gen_ai.request.model": "openai/gpt-4o-mini",
+        "attributes.gen_ai.provider.name": "openai",
+        "attributes.gen_ai.operation.name": "invoke_agent"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    },
+    {
+      "id": "eb6890d16c711b6d",
+      "type": "SPAN",
+      "name": "step 1",
+      "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "177fd55b5e8cd46f",
+      "start_time": "2026-10-04T17:07:24.388000+00:00",
+      "end_time": "2026-10-04T17:07:26.609000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": null,
+      "input": null,
+      "output": null,
+      "metadata": {
+        "scope.name": "gen_ai",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe",
+        "attributes.langfuse.trace.name": "langfuse-chatbot",
+        "attributes.session.id": "39be2d586e4b40ff8868b51e84d72470",
+        "attributes.gen_ai.operation.name": "agent_step"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    },
+    {
+      "id": "8861596f9d2fbf61",
+      "type": "GENERATION",
+      "name": "chat openai/gpt-4o-mini",
+      "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "eb6890d16c711b6d",
+      "start_time": "2026-10-04T17:07:24.390000+00:00",
+      "end_time": "2026-10-04T17:07:26.601000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": null,
+      "input": [
+        {
+          "role": "system",
+          "content": "You are a helpful Langfuse assistant. Help the user with their questions about Langfuse."
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "content": "What is Langfuse in one sentence?"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "content": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications."
+            }
+          ],
+          "finish_reason": "stop"
+        }
+      ],
+      "metadata": {
+        "scope.name": "gen_ai",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe",
+        "attributes.gen_ai.usage.cache_read.input_tokens": "[redacted]",
+        "attributes.gen_ai.usage.output_tokens": "[redacted]",
+        "attributes.gen_ai.usage.input_tokens": "[redacted]",
+        "attributes.gen_ai.response.model": "openai/gpt-4o-mini",
+        "attributes.gen_ai.response.id": "gen-1791133644-qcZELB66V0T6TvISIOvn",
+        "attributes.gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "attributes.gen_ai.client.operation.time_per_output_chunk": 0.0033492750000000343,
+        "attributes.gen_ai.client.operation.time_to_first_chunk": 2.1128639000000002,
+        "attributes.gen_ai.client.operation.duration": 2.2091964999999982,
+        "attributes.langfuse.trace.name": "langfuse-chatbot",
+        "attributes.session.id": "39be2d586e4b40ff8868b51e84d72470",
+        "attributes.gen_ai.request.model": "openai/gpt-4o-mini",
+        "attributes.gen_ai.provider.name": "openai",
+        "attributes.gen_ai.operation.name": "chat"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    },
+    {
+      "id": "550e0847b502248a",
+      "type": "SPAN",
+      "name": "handle-chat-message",
+      "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "d3f26663a5371dc8",
+      "start_time": "2026-10-04T17:07:26.666000+00:00",
+      "end_time": "2026-10-04T17:07:29.177000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": true,
+      "input": "How do I group several of those messages into one session?",
+      "output": "To group several messages into one session in Langfuse, you typically need to use a session identifier (session ID) that associates multiple messages with the same user interaction or event. This involves:\n\n1. Generating a unique session ID for each user or interaction session.\n2. Including this session ID in the metadata of each incoming message or event you want to group together.\n3. Ensuring that all relevant messages share the same session ID, allowing you to view and analyze them collectively as part of a single session.\n\nPlease refer to the Langfuse documentation for specific API calls or SDK methods related to session management, as implementation details may vary based on your setup.",
+      "metadata": {
+        "scope.version": "5.11.1",
+        "scope.name": "langfuse-sdk",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    },
+    {
+      "id": "a213088e88c097e2",
+      "type": "AGENT",
+      "name": "invoke_agent openai/gpt-4o-mini",
+      "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "550e0847b502248a",
+      "start_time": "2026-10-04T17:07:26.672000+00:00",
+      "end_time": "2026-10-04T17:07:29.177000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": null,
+      "input": [
+        {
+          "role": "system",
+          "content": "You are a helpful Langfuse assistant. Help the user with their questions about Langfuse."
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "content": "What is Langfuse in one sentence?"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "content": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "content": "How do I group several of those messages into one session?"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "content": "To group several messages into one session in Langfuse, you typically need to use a session identifier (session ID) that associates multiple messages with the same user interaction or event. This involves:\n\n1. Generating a unique session ID for each user or interaction session.\n2. Including this session ID in the metadata of each incoming message or event you want to group together.\n3. Ensuring that all relevant messages share the same session ID, allowing you to view and analyze them collectively as part of a single session.\n\nPlease refer to the Langfuse documentation for specific API calls or SDK methods related to session management, as implementation details may vary based on your setup."
+            }
+          ],
+          "finish_reason": "stop"
+        }
+      ],
+      "metadata": {
+        "scope.name": "gen_ai",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe",
+        "attributes.gen_ai.usage.cache_read.input_tokens": "[redacted]",
+        "attributes.gen_ai.usage.output_tokens": "[redacted]",
+        "attributes.gen_ai.usage.input_tokens": "[redacted]",
+        "attributes.gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "attributes.langfuse.trace.name": "langfuse-chatbot",
+        "attributes.session.id": "39be2d586e4b40ff8868b51e84d72470",
+        "attributes.gen_ai.request.model": "openai/gpt-4o-mini",
+        "attributes.gen_ai.provider.name": "openai",
+        "attributes.gen_ai.operation.name": "invoke_agent"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    },
+    {
+      "id": "ff9c960783ae10e9",
+      "type": "SPAN",
+      "name": "step 1",
+      "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "a213088e88c097e2",
+      "start_time": "2026-10-04T17:07:26.679000+00:00",
+      "end_time": "2026-10-04T17:07:29.174000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": null,
+      "input": null,
+      "output": null,
+      "metadata": {
+        "scope.name": "gen_ai",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe",
+        "attributes.langfuse.trace.name": "langfuse-chatbot",
+        "attributes.session.id": "39be2d586e4b40ff8868b51e84d72470",
+        "attributes.gen_ai.operation.name": "agent_step"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    },
+    {
+      "id": "977587d6768184c4",
+      "type": "GENERATION",
+      "name": "chat openai/gpt-4o-mini",
+      "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+      "session_id": "39be2d586e4b40ff8868b51e84d72470",
+      "parent_observation_id": "ff9c960783ae10e9",
+      "start_time": "2026-10-04T17:07:26.680000+00:00",
+      "end_time": "2026-10-04T17:07:29.161000+00:00",
+      "level": "DEFAULT",
+      "is_root_observation": null,
+      "input": [
+        {
+          "role": "system",
+          "content": "You are a helpful Langfuse assistant. Help the user with their questions about Langfuse."
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "content": "What is Langfuse in one sentence?"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "content": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "content": "How do I group several of those messages into one session?"
+            }
+          ]
+        }
+      ],
+      "output": [
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "content": "To group several messages into one session in Langfuse, you typically need to use a session identifier (session ID) that associates multiple messages with the same user interaction or event. This involves:\n\n1. Generating a unique session ID for each user or interaction session.\n2. Including this session ID in the metadata of each incoming message or event you want to group together.\n3. Ensuring that all relevant messages share the same session ID, allowing you to view and analyze them collectively as part of a single session.\n\nPlease refer to the Langfuse documentation for specific API calls or SDK methods related to session management, as implementation details may vary based on your setup."
+            }
+          ],
+          "finish_reason": "stop"
+        }
+      ],
+      "metadata": {
+        "scope.name": "gen_ai",
+        "resourceAttributes.telemetry.sdk.version": "2.11.0",
+        "resourceAttributes.telemetry.sdk.name": "opentelemetry",
+        "resourceAttributes.telemetry.sdk.language": "nodejs",
+        "resourceAttributes.service.name": "unknown_service:C:\\Program Files\\nodejs\\node.exe",
+        "attributes.gen_ai.usage.cache_read.input_tokens": "[redacted]",
+        "attributes.gen_ai.usage.output_tokens": "[redacted]",
+        "attributes.gen_ai.usage.input_tokens": "[redacted]",
+        "attributes.gen_ai.response.model": "openai/gpt-4o-mini",
+        "attributes.gen_ai.response.id": "gen-1791133646-6ML0dfhWqoTo2hQ1ii7Y",
+        "attributes.gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "attributes.gen_ai.client.operation.time_per_output_chunk": 0.012886148120300702,
+        "attributes.gen_ai.client.operation.time_to_first_chunk": 0.7409734000000026,
+        "attributes.gen_ai.client.operation.duration": 2.4812358999999997,
+        "attributes.langfuse.trace.name": "langfuse-chatbot",
+        "attributes.session.id": "39be2d586e4b40ff8868b51e84d72470",
+        "attributes.gen_ai.request.model": "openai/gpt-4o-mini",
+        "attributes.gen_ai.provider.name": "openai",
+        "attributes.gen_ai.operation.name": "chat"
+      },
+      "raw_keys": [
+        "bookmarked",
+        "completion_start_time",
+        "cost_details",
+        "created_at",
+        "end_time",
+        "environment",
+        "id",
+        "input",
+        "inputCost",
+        "inputUsage",
+        "input_price",
+        "internal_model_id",
+        "is_root_observation",
+        "latency",
+        "level",
+        "metadata",
+        "model",
+        "model_id",
+        "model_parameters",
+        "name",
+        "output",
+        "outputCost",
+        "outputUsage",
+        "output_price",
+        "parent_observation_id",
+        "project_id",
+        "prompt_id",
+        "prompt_name",
+        "prompt_version",
+        "public",
+        "release",
+        "session_id",
+        "start_time",
+        "status_message",
+        "tags",
+        "time_to_first_token",
+        "totalUsage",
+        "total_cost",
+        "total_price",
+        "trace_id",
+        "trace_name",
+        "type",
+        "updated_at",
+        "usagePricingTierId",
+        "usage_details",
+        "usage_pricing_tier_name",
+        "user_id",
+        "version"
+      ]
+    }
+  ],
+  "analysis": {
+    "observation_count": 8,
+    "types": [
+      "AGENT",
+      "GENERATION",
+      "SPAN"
+    ],
+    "trace_ids": [
+      "8635e9752c8efa9b3c6c1b2d035f6827",
+      "4f697b8c9c9e2f7522ecb3e2fdab8087"
+    ],
+    "session_ids": [
+      "39be2d586e4b40ff8868b51e84d72470"
+    ],
+    "requested_session_id": "39be2d586e4b40ff8868b51e84d72470",
+    "root_count": 2,
+    "generation_count": 2,
+    "timeline": [
+      {
+        "id": "a3f3df3b8acbef4d",
+        "type": "SPAN",
+        "name": "handle-chat-message",
+        "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "b1821f718fb7f359",
+        "start_time": "2026-10-04T17:07:24.270000+00:00",
+        "end_time": "2026-10-04T17:07:26.614000+00:00",
+        "is_root_observation": true
+      },
+      {
+        "id": "177fd55b5e8cd46f",
+        "type": "AGENT",
+        "name": "invoke_agent openai/gpt-4o-mini",
+        "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "a3f3df3b8acbef4d",
+        "start_time": "2026-10-04T17:07:24.337000+00:00",
+        "end_time": "2026-10-04T17:07:26.615000+00:00",
+        "is_root_observation": null
+      },
+      {
+        "id": "eb6890d16c711b6d",
+        "type": "SPAN",
+        "name": "step 1",
+        "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "177fd55b5e8cd46f",
+        "start_time": "2026-10-04T17:07:24.388000+00:00",
+        "end_time": "2026-10-04T17:07:26.609000+00:00",
+        "is_root_observation": null
+      },
+      {
+        "id": "8861596f9d2fbf61",
+        "type": "GENERATION",
+        "name": "chat openai/gpt-4o-mini",
+        "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "eb6890d16c711b6d",
+        "start_time": "2026-10-04T17:07:24.390000+00:00",
+        "end_time": "2026-10-04T17:07:26.601000+00:00",
+        "is_root_observation": null
+      },
+      {
+        "id": "550e0847b502248a",
+        "type": "SPAN",
+        "name": "handle-chat-message",
+        "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "d3f26663a5371dc8",
+        "start_time": "2026-10-04T17:07:26.666000+00:00",
+        "end_time": "2026-10-04T17:07:29.177000+00:00",
+        "is_root_observation": true
+      },
+      {
+        "id": "a213088e88c097e2",
+        "type": "AGENT",
+        "name": "invoke_agent openai/gpt-4o-mini",
+        "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "550e0847b502248a",
+        "start_time": "2026-10-04T17:07:26.672000+00:00",
+        "end_time": "2026-10-04T17:07:29.177000+00:00",
+        "is_root_observation": null
+      },
+      {
+        "id": "ff9c960783ae10e9",
+        "type": "SPAN",
+        "name": "step 1",
+        "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "a213088e88c097e2",
+        "start_time": "2026-10-04T17:07:26.679000+00:00",
+        "end_time": "2026-10-04T17:07:29.174000+00:00",
+        "is_root_observation": null
+      },
+      {
+        "id": "977587d6768184c4",
+        "type": "GENERATION",
+        "name": "chat openai/gpt-4o-mini",
+        "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+        "session_id": "39be2d586e4b40ff8868b51e84d72470",
+        "parent_observation_id": "ff9c960783ae10e9",
+        "start_time": "2026-10-04T17:07:26.680000+00:00",
+        "end_time": "2026-10-04T17:07:29.161000+00:00",
+        "is_root_observation": null
+      }
+    ],
+    "root_io": [
+      {
+        "id": "a3f3df3b8acbef4d",
+        "type": "SPAN",
+        "name": "handle-chat-message",
+        "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+        "input_python_type": "str",
+        "output_python_type": "str",
+        "input": "What is Langfuse in one sentence?",
+        "output": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications."
+      },
+      {
+        "id": "550e0847b502248a",
+        "type": "SPAN",
+        "name": "handle-chat-message",
+        "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+        "input_python_type": "str",
+        "output_python_type": "str",
+        "input": "How do I group several of those messages into one session?",
+        "output": "To group several messages into one session in Langfuse, you typically need to use a session identifier (session ID) that associates multiple messages with the same user interaction or event. This involves:\n\n1. Generating a unique session ID for each user or interaction session.\n2. Including this session ID in the metadata of each incoming message or event you want to group together.\n3. Ensuring that all relevant messages share the same session ID, allowing you to view and analyze them collectively as part of a single session.\n\nPlease refer to the Langfuse documentation for specific API calls or SDK methods related to session management, as implementation details may vary based on your setup."
+      }
+    ],
+    "generation_io": [
+      {
+        "id": "8861596f9d2fbf61",
+        "name": "chat openai/gpt-4o-mini",
+        "trace_id": "8635e9752c8efa9b3c6c1b2d035f6827",
+        "input_python_type": "str",
+        "output_python_type": "str",
+        "input": [
+          {
+            "role": "system",
+            "content": "You are a helpful Langfuse assistant. Help the user with their questions about Langfuse."
+          },
+          {
+            "role": "user",
+            "parts": [
+              {
+                "type": "text",
+                "content": "What is Langfuse in one sentence?"
+              }
+            ]
+          }
+        ],
+        "output": [
+          {
+            "role": "assistant",
+            "parts": [
+              {
+                "type": "text",
+                "content": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications."
+              }
+            ],
+            "finish_reason": "stop"
+          }
+        ]
+      },
+      {
+        "id": "977587d6768184c4",
+        "name": "chat openai/gpt-4o-mini",
+        "trace_id": "4f697b8c9c9e2f7522ecb3e2fdab8087",
+        "input_python_type": "str",
+        "output_python_type": "str",
+        "input": [
+          {
+            "role": "system",
+            "content": "You are a helpful Langfuse assistant. Help the user with their questions about Langfuse."
+          },
+          {
+            "role": "user",
+            "parts": [
+              {
+                "type": "text",
+                "content": "What is Langfuse in one sentence?"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "parts": [
+              {
+                "type": "text",
+                "content": "Langfuse is a platform designed to help developers and businesses integrate and analyze the performance of language models and AI-driven applications."
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "parts": [
+              {
+                "type": "text",
+                "content": "How do I group several of those messages into one session?"
+              }
+            ]
+          }
+        ],
+        "output": [
+          {
+            "role": "assistant",
+            "parts": [
+              {
+                "type": "text",
+                "content": "To group several messages into one session in Langfuse, you typically need to use a session identifier (session ID) that associates multiple messages with the same user interaction or event. This involves:\n\n1. Generating a unique session ID for each user or interaction session.\n2. Including this session ID in the metadata of each incoming message or event you want to group together.\n3. Ensuring that all relevant messages share the same session ID, allowing you to view and analyze them collectively as part of a single session.\n\nPlease refer to the Langfuse documentation for specific API calls or SDK methods related to session management, as implementation details may vary based on your setup."
+              }
+            ],
+            "finish_reason": "stop"
+          }
+        ]
+      }
+    ]
+  }
+}

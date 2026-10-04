@@ -106,7 +106,7 @@ xxhash==3.5.0
 yarl==1.20.1
 zope.interface==7.2
 zstandard==0.23.0
-deepeval==2.7.0
+deepeval==4.2.6
 langfuse==4.16.0
 rich==13.9.4
 markdown-it-py==4.2.0

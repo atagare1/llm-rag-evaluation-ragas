@@ -1,6 +1,7 @@
 """PV-E1: one live RAGAS faithfulness result through the real EvaluationRunner.
 
 Reuses the Llama smoke judge and Phase 1 faithfulness test data.
+The judge is RAGAS_LLM_MODEL or the OpenRouter Llama default.
 The policy is the existing experimental faithfulness threshold.
 It is not a new production quality bar.
 """
@@ -8,7 +9,6 @@ It is not a new production quality bar.
 import math
 
 import pytest
-from langchain_openai import ChatOpenAI
 from ragas.llms import LangchainLLMWrapper
 
 from ai_qe_eval.domain.config import EvaluationConfig
@@ -17,9 +17,8 @@ from ai_qe_eval.evaluators.ragas import RAGASFaithfulnessEvaluator
 from ai_qe_eval.gate.quality_gate import QualityGate
 from ai_qe_eval.policy.quality_policy import QualityPolicy
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
+from ragas_live import live_ragas_llama_chat, ragas_llama_judge_model_name
 from utils import metric_threshold, read_test_data
-
-SMOKE_JUDGE_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 
 
 @pytest.mark.live
@@ -40,7 +39,7 @@ def test_pv_e1_ragas_faithfulness_through_runner(get_test_data):
             "kwargs": {},
         }
     }
-    llm = ChatOpenAI(model=SMOKE_JUDGE_MODEL, temperature=0)
+    llm = live_ragas_llama_chat()
     wrapper = LangchainLLMWrapper(llm)
     registry = EvaluationRegistry()
     registry.register(
@@ -65,7 +64,7 @@ def test_pv_e1_ragas_faithfulness_through_runner(get_test_data):
         gate=QualityGate(),
     )
     config = EvaluationConfig(evaluations=["faithfulness"])
-    print("provider_model", SMOKE_JUDGE_MODEL)
+    print("provider_model", ragas_llama_judge_model_name())
 
     decision = runner.run(request, config)
 
