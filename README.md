@@ -1,27 +1,237 @@
-# LLM / RAG evaluation — Phase 1 POC and Phase 2 evaluation core
+# AI-QE Evaluation Platform
 
-This repository contains two layers.
+Agent and RAG quality is not one score. Tool order can be correct while the application state is wrong. A retrieved context can be relevant while the answer is unfaithful. This repository is a provider-agnostic evaluation engine for that class of problem: separate metrics, explicit policies, and one fail-closed QualityGate.
 
-| Phase | What it is | Status |
+The current flagship path is a Playwright MCP TodoMVC evaluation. Observed tool calls are captured, mapped into a Design A request, and scored by Tool Correctness, MCP Execution Health, and Final State. The default CLI uses **scripted** MCP execution. It does not open a live browser.
+
+Package: [`src/ai_qe_eval`](src/ai_qe_eval). Historical RAGAS POC scripts remain in the repo as a baseline; they are not the foundation for new work.
+
+| Layer | What it is | Status |
 |---|---|---|
-| Phase 1 | RAGAS-based evaluation POC (Together AI + external RAG demo) | Historical / baseline. Retained. Not the foundation for new work. |
-| Phase 2 | Provider-agnostic AI evaluation core (`src/ai_qe_eval`) | COMPLETE / FROZEN |
-| Phase 3 | Platform evolution | STARTING (documentation alignment only so far) |
-
-```text
-Phase 1
-RAGAS-based Evaluation POC
-        ↓
-Phase 2
-Provider-Agnostic AI Evaluation Core
-        ↓
-Phase 3
-Platform Evolution
-```
+| Phase 1 | RAGAS POC (Together AI + external RAG demo) | Historical / retained |
+| Phase 2 | Provider-agnostic evaluation core | Implemented |
+| Phase 3+ | MCP / Langfuse capture, CLI, flagship demo | Implemented for the scope below |
 
 Future work must extend the Phase 2 contracts. Do not grow new framework behavior by editing the original RAGAS pytest scripts.
 
-Phase 2 is not a production evaluation platform. It does not include CI release blocking, observability, persistence, agent evaluation, or security evaluation.
+---
+
+## Architecture
+
+Sources produce observations. Capture helpers extract `ToolInvocation` values. Those become a capability-keyed request map. `EvaluationRunner` is the only executor.
+
+```text
+source (scripted MCP, live Playwright MCP, or Langfuse observations)
+        ↓
+extraction (serialize / parse → ToolInvocation)
+        ↓
+Design A request map     {"capability": {"args": [...], "kwargs": {...}}}
+        +
+EvaluationConfig         (ordered capability names)
+        ↓
+EvaluationRunner
+        ↓
+Evaluator.evaluate(*args, **kwargs) → EvaluationResult[]
+        ↓
+normalize_many
+        ↓
+QualityPolicy.apply      (one policy per result metric)
+        ↓
+QualityGate.evaluate     (any policy fail fails the run)
+        ↓
+GateDecision + CLI report
+```
+
+There is no score average, pass rate, or combined run score. `EvaluationResult.score` is not pass/fail. `QualityPolicy` owns the threshold comparison. `QualityGate` is an in-process any-fail decision, not a CI or deployment plugin.
+
+```mermaid
+flowchart TD
+    S[Source] --> X[Extraction]
+    X --> T[Request map]
+    T --> R[EvaluationRunner.run]
+    C[EvaluationConfig] --> R
+    Reg[EvaluationRegistry catalog lookup] --> R
+    Inj[Injected evaluators and QualityPolicy map] --> R
+    R --> E[Evaluator.evaluate]
+    E --> F[EvaluationResult list]
+    F --> G[normalize_many]
+    G --> H[QualityPolicy.apply]
+    H --> PD[PolicyDecision list]
+    PD --> I[QualityGate.evaluate]
+    I --> J[GateDecision]
+    J --> K[CLI report]
+```
+
+---
+
+## Quick Start
+
+Install from the repository root, then run the scripted MCP demo. The CLI does not start `@playwright/mcp`, a browser, or Langfuse.
+
+```bash
+git clone https://github.com/atagare1/llm-rag-evaluation-ragas.git
+cd llm-rag-evaluation-ragas
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+
+PYTHONPATH=src python -m ai_qe_eval
+PYTHONPATH=src python -m ai_qe_eval --scenario fail
+```
+
+Exit codes: QualityGate PASS = `0`, FAIL = `1`.
+
+### PASS — correct tools, healthy execution, expected final state
+
+```text
+AI-QE Evaluation
+────────────────────────────────
+Scenario: MCP P0 Demo
+
+Evaluator                  Score    Result
+Tool Correctness            1.00     PASS
+MCP Execution Health        1.00     PASS
+Final State                 1.00     PASS
+
+Quality Gate                         PASS
+────────────────────────────────
+```
+
+### FAIL — same tool sequence, wrong application outcome
+
+The fail demo types `Buy bread` instead of `Buy milk`. Tool Correctness and MCP Execution Health still pass. Final State fails, so the gate fails. The CLI prints the evaluator reason on failing rows only.
+
+```text
+AI-QE Evaluation
+────────────────────────────────
+Scenario: MCP P0 Demo
+
+Evaluator                  Score    Result
+Tool Correctness            1.00     PASS
+MCP Execution Health        1.00     PASS
+Final State                 0.00     FAIL
+  Final-state check failed.
+
+Quality Gate                         FAIL
+────────────────────────────────
+```
+
+---
+
+## TodoMVC demo
+
+Goal: add `Buy milk` on the [Playwright TodoMVC](https://demo.playwright.dev/todomvc) demo.
+
+Scripted tool order (also the QE-supplied expected names):
+
+`browser_navigate` → `browser_snapshot` → `browser_click` → `browser_type` → `browser_click` → `browser_snapshot`
+
+The CLI demo uses `SequenceToolSelector` and a `ScriptedMcpSession` that returns predetermined `CallToolResult` values. `run_playwright_mcp_agent` still captures observations through the real serialize/capture helpers. `mcp_p0_request()` then builds the Design A map for the three P0 evaluators.
+
+Final State is independent of tool names. It checks whether the last `browser_snapshot` contains a list item for `Buy milk`. Correct tool execution therefore does not imply a correct outcome: the fail scenario keeps the same six tools and `isError=false` results, types `Buy bread`, and the gate fails on Final State only.
+
+The default CLI Tool Correctness path uses DeepEval name/order matching (`evaluation_params=[]`). Expected calls are QE-supplied names; they are not inferred from telemetry.
+
+---
+
+## Implemented evaluators
+
+Adapters return `EvaluationResult`. They do not apply `QualityPolicy` or `QualityGate`.
+
+**Deterministic** (`evaluators/deterministic.py`)
+
+| Evaluator | Metric | Input |
+|---|---|---|
+| `DeterministicEvaluator` | `exact_match` | `output`, `expected` |
+| `MCPExecutionHealthEvaluator` | `mcp_execution_health` | observed `ToolInvocation` results; fails on `isError=true` |
+| `FinalStateEvaluator` | `final_state` | caller-supplied `bool` |
+
+**RAGAS** (`evaluators/ragas.py`)
+
+| Evaluator | Metric | Notes |
+|---|---|---|
+| `RAGASFaithfulnessEvaluator` | `faithfulness` | RAGAS 0.2.15 `Faithfulness` only. Other Phase 1 RAGAS metrics are not this adapter. |
+
+**DeepEval** (`evaluators/deepeval.py`, `deepeval_tool_correctness.py`, `deepeval_turn_relevancy.py`)
+
+| Evaluator | Metric |
+|---|---|
+| `DeepEvalGEvalCorrectnessEvaluator` | `correctness` |
+| `DeepEvalFaithfulnessEvaluator` | `faithfulness` |
+| `DeepEvalAnswerRelevancyEvaluator` | `answer_relevancy` |
+| `DeepEvalContextualRelevancyEvaluator` | `contextual_relevancy` |
+| `DeepEvalContextualPrecisionEvaluator` | `contextual_precision` |
+| `DeepEvalContextualRecallEvaluator` | `contextual_recall` |
+| `DeepEvalHallucinationEvaluator` | `hallucination` |
+| `DeepEvalToolCorrectnessEvaluator` | `tool_correctness` |
+| `DeepEvalTurnRelevancyEvaluator` | `turn_relevancy` |
+
+The default CLI runs only the three P0 evaluators: `tool_correctness`, `mcp_execution_health`, `final_state`.
+
+---
+
+## Integrations
+
+### Playwright MCP
+
+Implemented in `integrations/playwright_mcp.py`, `playwright_mcp_agent.py`, and `playwright_mcp_selector.py`.
+
+* Official package pin: `@playwright/mcp@0.0.82` over Python `mcp` stdio.
+* Serializes `CallToolResult` to plain dicts, including snapshot sidecar resolution.
+* `run_playwright_mcp_agent` executes an injected selector and captures `ToolInvocation` values.
+* `mcp_p0_request()` is the Design A builder for the P0 evaluators.
+
+**Default CLI:** scripted session, no `npx`, no browser. **Live validation:** separate `@pytest.mark.live` tests start the real Playwright MCP server against TodoMVC. Those tests are not the Quick Start path.
+
+### Langfuse
+
+Implemented in `integrations/langfuse_observations.py` and `capture/langfuse_trace.py`.
+
+* Injected client. Paginates Observations API v2 `get_many` for one `trace_id` and waits for a settle predicate.
+* Converts `TOOL` observations into `ToolInvocation` values.
+* `ingest_langfuse_trace()` returns a Tool Correctness request map. Expected tool calls stay QE-supplied.
+* Does not use `langfuse.trace()` or `api.trace.list`.
+* The default CLI does not call Langfuse. Live Tool Correctness-through-runner tests are marked `live` and deselected from `pytest tests -q`.
+
+---
+
+## Validation
+
+Deterministic baseline from `python -m pytest tests -q` (MVP-03, not re-measured by this README change):
+
+**361 passed, 32 live tests deselected, 2 warnings.**
+
+`pytest.ini` sets `-m "not live"` and `-p no:deepeval`. The two warnings are existing DeepEval deprecations (`LLMTestCaseParams`; `HallucinationMetric` score-direction notice), not CLI or demo failures.
+
+Live tests (Playwright MCP, Langfuse, RAGAS/DeepEval provider runs) exist under `tests/platform/` and are excluded from that baseline. Do not treat the deterministic count as live-provider proof.
+
+```bash
+pytest tests -q          # deterministic baseline
+pytest -m live           # live MCP / Langfuse / provider tests when configured
+```
+
+---
+
+## Roadmap
+
+**Implemented**
+
+* Design A request maps and thin `EvaluationRunner`
+* Registry, `EvaluationConfig`, result normalizer, `QualityPolicy`, `QualityGate`
+* Deterministic, RAGAS Faithfulness, and DeepEval evaluator adapters listed above
+* Playwright MCP capture/agent boundary and scripted CLI demo
+* Langfuse observation retrieval → Tool Correctness request map
+* Concise CLI report (no score aggregation)
+
+**Not implemented / future**
+
+* CI mapping of `GateDecision.passed` to a pipeline gate
+* Persistence, lineage, or a dashboard
+* Distributed execution
+* Security or adversarial evaluation
+* CLI coverage beyond the P0 MCP demo
+* Remaining Phase 1 RAGAS metrics as Phase 2 adapters (context precision, context recall, response relevancy, factual correctness)
+* Default-CLI live browser or Langfuse execution
 
 ---
 
@@ -45,7 +255,7 @@ Phase 1 thresholds in `utils.py` (`RAGAS_THRESHOLD_*`) are experimental POC gate
 
 With the file default judge `mistralai/Mixtral-8x7B-Instruct-v0.1`, Together returns `model_not_available` for serverless access. The four root live tests then fail (`test_context_precision.py`, `test_context_recall.py`, `test_faithfulness.py`, `test_resp_relevancy_factual_correctness.py`; the last also reports a missing/NaN `answer_relevancy` score). This is a Phase 1 provider/model availability issue. Phase 2 unit tests do not call Together.
 
-Last measured during the Phase 2 freeze review: `pytest tests -q` — 206 passed. `pytest -q` — 206 passed and those 4 live failures. Do not treat that count as a new measurement from this documentation change.
+Last measured during the Phase 2 freeze review: `pytest tests -q` — 206 passed. `pytest -q` — 206 passed and those 4 live failures. That count is historical. The current deterministic baseline is the Validation section above.
 
 ### Install and configure (Phase 1)
 
@@ -71,7 +281,7 @@ Live tests skip when `OPENAI_API_KEY` is unset. `pytest.ini` puts `src` on `pyth
 
 ```bash
 pytest          # unit tests plus live RAGAS tests when a key is set
-pytest tests -q # Phase 2 and Phase 1 unit tests; no Together or RAG API
+pytest tests -q # deterministic suite; no Together, RAG API, live MCP, or Langfuse
 ```
 
 Experimental Phase 1 gates: context precision `> 0.8`, context recall `> 0.7`, faithfulness `> 0.8`, answer relevancy `> 0.8`, factual correctness `> 0.8`.
@@ -80,119 +290,30 @@ Together AI is the OpenAI-compatible host. Model choice is `RAGAS_LLM_MODEL`. Th
 
 ---
 
-## Phase 2 — canonical architecture
-
-Package: `src/ai_qe_eval`. The core is provider-neutral. RAGAS and DeepEval appear only as evaluator adapters.
-
-Logical flow for one request map:
-
-```text
-request map
-       +
-EvaluationConfig          (which capability names should run)
-       ↓
-EvaluationRunner
-       ↓
-EvaluationRegistry        (capability catalog lookup)
-       +
-injected Evaluator        (instance map; not stored in the registry)
-       ↓
-EvaluationResult[]
-       ↓
-Result normalizer         (normalize_many)
-       ↓
-QualityPolicy.apply       (one policy per result metric)
-       ↓
-PolicyDecision[]
-       ↓
-QualityGate.evaluate
-       ↓
-GateDecision
-```
-
-`EvaluationRunner.run(request, configuration)` still returns `GateDecision` for one request map. `run_many(requests, configuration)` evaluates each request with the same config, in order, and stores one `EvaluationRun`. `requests[i]` matches `trace_evaluations[i]`, which holds that request's normalized results and policy decisions. `results` and `decisions` are those same objects flattened in request order. One `QualityGate.evaluate` call receives that flat decision list, so the existing any-fail rule applies to every policy decision in the run. There is no average, pass rate, or other run score. A failure still raises and clears `last_run` for that call. An empty request list raises `ValueError`.
-
-```mermaid
-flowchart TD
-    T[Request map] --> R[EvaluationRunner.run]
-    C[EvaluationConfig] --> R
-    Reg[EvaluationRegistry catalog lookup] --> R
-    Inj[Injected evaluator instances and QualityPolicy map] --> R
-    R --> E[Evaluator.evaluate]
-    E --> F[EvaluationResult list]
-    F --> G[normalize_many]
-    G --> H[QualityPolicy.apply]
-    H --> PD[PolicyDecision list]
-    PD --> I[QualityGate.evaluate]
-    I --> J[GateDecision]
-```
-
-The registry does not sit between config and the runner as an executor. `EvaluationConfig` selects names. `EvaluationRegistry.get` checks that the name is catalogued. The executable evaluator is supplied by the caller.
-
-### Component responsibilities
-
-| Component | Module | Responsibility |
-|---|---|---|
-| Request map | Runner input | Capability-keyed `{"name": {"args": [...], "kwargs": {...}}}`. Evaluators receive their own arguments. The runner does not rebuild or mutate the map. |
-| Trace events | `domain/events.py` | Optional `events` entries are dicts with a `type` key (`make_trace_event`). No evaluator consumes them yet. Typed event classes are not implemented. |
-| `EvaluationRun` / `TraceEvaluation` | `domain/run.py` | One execution record. `requests[i]` aligns with `trace_evaluations[i]` (`results` and `decisions` for that request). Flat `results` / `decisions` follow the same order. `gate_decision` is the existing gate outcome for those decisions. The run does not evaluate or aggregate scores. |
-| `EvaluationResult` | `domain/result.py` | What one metric measurement is: `metric`, `evaluator`, `score`, optional `reason`, `raw_result`. No threshold, no pass/fail, no severity. |
-| `Evaluator` | `domain/evaluator.py` | Sync protocol: `evaluate(*args, **kwargs) -> list[EvaluationResult]`. One evaluator may return more than one result. |
-| `EvaluationRegistry` / `EvaluationCapability` | `domain/registry.py` | Catalog of what can be named: `name`, `evaluator` (string), `category`. Duplicate register raises `ValueError`. Missing `get` raises `KeyError`. It does not store instances, thresholds, or policies. |
-| `EvaluationConfig` | `domain/config.py` | What should run: ordered `evaluations: list[str]`. Duplicates raise `ValueError`. Empty list is valid. It does not hold models, prompts, credentials, or thresholds. |
-| `DeterministicEvaluator` | `evaluators/deterministic.py` | `metric="exact_match"`, `evaluator="deterministic"`. Score `1.0` if `output == expected`, else `0.0`. No provider. |
-| `RAGASFaithfulnessEvaluator` | `evaluators/ragas.py` | Adapter for RAGAS `Faithfulness` only. Maps `input` / `output` / `retrieval` (`page_content` or string) to `SingleTurnSample`. `metric="faithfulness"`, `evaluator="ragas"`. Other Phase 1 RAGAS metrics are not this adapter. **Implemented. Not live-validated** through the runner. |
-| `DeepEvalGEvalCorrectnessEvaluator` | `evaluators/deepeval.py` | Adapter using DeepEval GEval as the mechanism. `metric="correctness"`, `evaluator="deepeval"` (not `"geval"`). Maps `input` / `output` / `expected`. **Implemented. Not live-validated.** |
-| Result normalizer | `normalization/result_normalizer.py` | `normalize` / `normalize_many` copy an `EvaluationResult` and deepcopy `raw_result`. They do not change the score, apply policy, or rewrite vendor semantics. |
-| `QualityPolicy` / `PolicyDecision` | `policy/quality_policy.py` | Policy owns `metric`, `operator`, `threshold`. Operators: `>`, `>=`, `<`, `<=`, `==`, `!=`. `apply` compares one numeric score and returns `PolicyDecision` (`passed` lives here). Metric mismatch raises `ValueError`. The score on the result is not modified. |
-| `QualityGate` / `GateDecision` | `gate/quality_gate.py` | Gate consumes `PolicyDecision` objects and returns one `GateDecision(passed, decisions, reason)`. Any `passed is False` fails the gate. Empty decision list passes. The gate does not re-check score against threshold and does not average scores. This is an in-process decision, not a CI or deployment gate. |
-| `EvaluationRunner` | `runner/evaluation_runner.py` | `run(request, configuration) -> GateDecision` delegates to `run_many([request], configuration)`. Resolves catalog names, calls injected evaluators, normalizes, applies policies, then calls the gate once. |
-
-### Provider-agnostic boundary
+## Phase 2 contracts
 
 Domain, policy, gate, normalizer, and runner do not import RAGAS or DeepEval. Adapters do.
 
-```text
-                 Evaluator protocol
-                        │
-       ┌────────────────┼────────────────┐
-       │                │                │
- Deterministic     RAGAS adapter    DeepEval adapter
- exact_match       Faithfulness     GEval correctness
-       │                │                │
-       └────────────────┼────────────────┘
-                        ↓
-               EvaluationResult
-```
+| Component | Module | Responsibility |
+|---|---|---|
+| Request map | Runner input | `{"name": {"args": [...], "kwargs": {...}}}`. The runner does not rebuild the map. |
+| `EvaluationRun` / `TraceEvaluation` | `domain/run.py` | Execution record. `requests[i]` aligns with `trace_evaluations[i]`. No score aggregation. |
+| `EvaluationResult` | `domain/result.py` | `metric`, `evaluator`, `score`, optional `reason`, `raw_result`. No pass/fail. |
+| `Evaluator` | `domain/evaluator.py` | `evaluate(*args, **kwargs) -> list[EvaluationResult]` |
+| `EvaluationRegistry` | `domain/registry.py` | Name catalog only. Does not store instances or thresholds. |
+| `EvaluationConfig` | `domain/config.py` | Ordered capability names. |
+| Result normalizer | `normalization/result_normalizer.py` | Copies results. Does not change scores. |
+| `QualityPolicy` | `policy/quality_policy.py` | Operators `>`, `>=`, `<`, `<=`, `==`, `!=`. `passed` lives here. |
+| `QualityGate` | `gate/quality_gate.py` | Any `passed is False` fails. Empty decision list passes. |
+| `EvaluationRunner` | `runner/evaluation_runner.py` | `run` / `run_many`. Resolves catalog names, calls injected evaluators, normalizes, applies policies, gates once. |
 
-Implemented adapters are only the three above. G-Eval is the DeepEval mechanism inside `DeepEvalGEvalCorrectnessEvaluator`, not a separate framework. Additional providers would be new adapters that return `EvaluationResult`. They are not implied by the protocol alone.
+`EvaluationRunner.run(request, configuration)` returns `GateDecision` for one request map. `run_many` evaluates several request maps in order. One gate call uses the flat decision list. An empty request list raises `ValueError`. A runner failure clears `last_run` for that call.
 
-Phase 1 still has its own RAGAS path outside this diagram.
-
-### What Phase 2 does not decide
+### What the core does not decide
 
 * `EvaluationResult.score` is not pass/fail.
 * `QualityPolicy` is not the release decision.
 * `QualityGate` is not GitHub Actions, Jenkins, or a deployment block.
-* Empty `EvaluationConfig` runs nothing and delegates `[]` to the gate, which passes.
-
----
-
-## Phase 3 — platform evolution (not implemented here)
-
-Status: **STARTING**. This documentation change does not add runtime behavior.
-
-Intentionally deferred:
-
-* Run-level score aggregation, pass rates, or a gate rule other than the existing any-fail over collected policy decisions
-* CI quality-gate integration (mapping `GateDecision.passed` to a pipeline)
-* Observability / tracing, including Langfuse
-* Agent or trajectory evaluation
-* MCP-based execution
-* Security or adversarial evaluation
-* Distributed execution
-* Persistence and lineage
-* Migrating the remaining Phase 1 RAGAS metrics onto adapters
 
 ---
 
@@ -200,11 +321,12 @@ Intentionally deferred:
 
 | Suite | Role |
 |---|---|
-| `tests/test_evaluation_*.py`, `test_trace_events.py`, `test_evaluator_contract.py` | Domain contracts |
-| `tests/test_deterministic_evaluator.py` | Exact match |
-| `tests/test_ragas_evaluator.py`, `tests/test_deepeval_evaluator.py` | Adapter mapping with stubs. No live LLM. |
-| `tests/test_result_normalizer.py`, `test_quality_policy.py`, `test_quality_gate.py`, `test_evaluation_runner.py` | Normalization, policy, gate, thin runner |
-| `tests/test_end_to_end.py` | Pipeline with test doubles, plus a local `DeterministicEvaluator` smoke test |
+| `tests/test_evaluation_*.py`, `test_evaluator_contract.py` | Domain contracts |
+| `tests/test_deterministic_evaluator.py` | Exact match, final state, MCP health |
+| `tests/test_ragas_evaluator.py`, `tests/test_deepeval_*.py` | Adapter mapping with stubs. No live LLM. |
+| `tests/test_evaluation_runner.py`, `test_quality_policy.py`, `test_quality_gate.py` | Thin runner, policy, gate |
+| `tests/test_cli.py`, `tests/test_cli_mcp_p0_demo.py` | Scripted CLI report and MCP demo through `EvaluationRunner` |
+| `tests/platform/test_pv_*.py` | Platform validation, including `@pytest.mark.live` MCP / Langfuse / provider tests |
 | Root `test_*.py` | Phase 1 live RAGAS. Separate from the Phase 2 runner. |
 
-End-to-end tests prove delegation order (`evaluator` → `normalizer` → `policy` → `gate`). They are not live RAGAS or DeepEval runs.
+End-to-end deterministic tests prove delegation order (`evaluator` → `normalizer` → `policy` → `gate`). They are not live RAGAS, DeepEval-provider, Playwright MCP server, or Langfuse runs.

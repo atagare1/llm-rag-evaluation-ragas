@@ -7,6 +7,7 @@ expected_tool_calls, or run evaluation.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -54,6 +55,7 @@ async def run_playwright_mcp_agent(
     session: Any,
     selector: ToolSelector,
     max_steps: int,
+    on_tool_call: Callable[..., Any] | None = None,
 ) -> PlaywrightMcpAgentRun:
     """Execute selector-chosen Playwright MCP tools and capture observations."""
     if not isinstance(goal, str) or not goal:
@@ -74,14 +76,15 @@ async def run_playwright_mcp_agent(
         name, arguments = selected
         mcp_result = await session.call_tool(name, arguments)
         plain = serialize_call_tool_result(mcp_result)
-        observed.append(
-            tool_invocation_from_observation(
-                name=name,
-                arguments=arguments,
-                result=plain,
-            )
+        invocation = tool_invocation_from_observation(
+            name=name,
+            arguments=arguments,
+            result=plain,
         )
+        observed.append(invocation)
         last_plain_result = plain
+        if on_tool_call is not None:
+            on_tool_call(invocation, order=len(observed))
 
     return PlaywrightMcpAgentRun(
         goal=goal,

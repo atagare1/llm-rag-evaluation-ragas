@@ -9,6 +9,7 @@ from ai_qe_eval.capture.mcp_trace import (
     mcp_p0_request,
     tool_invocation_from_observation,
 )
+from ai_qe_eval.domain.conversation import ToolInvocation
 from ai_qe_eval.integrations.playwright_mcp import TODO_MVC_URL
 from ai_qe_eval.integrations.playwright_mcp_agent import (
     PlaywrightMcpAgentRun,
@@ -169,3 +170,45 @@ async def test_mcp_is_error_is_preserved_and_does_not_raise():
     assert len(run.observed_tool_calls) == 1
     assert run.observed_tool_calls[0].result["isError"] is True
     assert run.observed_tool_calls[0].result["content"]
+
+
+@pytest.mark.asyncio
+async def test_on_tool_call_receives_captured_invocations_in_execution_order():
+    session = FakeSession()
+    seen: list[tuple[int, ToolInvocation]] = []
+
+    def _on_tool_call(invocation: ToolInvocation, *, order: int) -> None:
+        seen.append((order, invocation))
+
+    run = await run_playwright_mcp_agent(
+        goal=GOAL,
+        session=session,
+        selector=SequenceToolSelector(P0_TOOL_SEQUENCE),
+        max_steps=8,
+        on_tool_call=_on_tool_call,
+    )
+
+    assert [order for order, _invocation in seen] == list(
+        range(1, len(EXPECTED_TOOL_ORDER) + 1)
+    )
+    assert [invocation.name for _order, invocation in seen] == EXPECTED_TOOL_ORDER
+    assert [invocation for _order, invocation in seen] == run.observed_tool_calls
+    assert all(isinstance(invocation, ToolInvocation) for _order, invocation in seen)
+    assert seen[0][1].arguments == {"url": TODO_MVC_URL}
+    assert seen[3][1].arguments["text"] == "Buy milk"
+    assert all(isinstance(invocation.result, dict) for _order, invocation in seen)
+
+
+@pytest.mark.asyncio
+async def test_agent_does_not_dump_mcp_results_to_stdout(capsys):
+    session = FakeSession()
+    await run_playwright_mcp_agent(
+        goal=GOAL,
+        session=session,
+        selector=SequenceToolSelector(P0_TOOL_SEQUENCE),
+        max_steps=8,
+    )
+    captured = capsys.readouterr()
+    assert "MCP_DIAG" not in captured.out
+    assert "MCP_DIAG" not in captured.err
+    assert "CallToolResult" not in captured.out
