@@ -2,7 +2,7 @@
 
 Agent and RAG quality is not one score. Tool order can be correct while the application state is wrong. A retrieved context can be relevant while the answer is unfaithful. This repository is a provider-agnostic evaluation engine for that class of problem: separate metrics, explicit policies, and one fail-closed QualityGate.
 
-The current flagship path is a Playwright MCP TodoMVC evaluation. Observed tool calls are captured, mapped into a Design A request, and scored by Tool Correctness, MCP Execution Health, and Final State. The default CLI uses **scripted** MCP execution. It does not open a live browser.
+The default CLI is a **scripted** Playwright MCP TodoMVC evaluation: observed tool calls are captured, mapped into a Design A request, and scored by Tool Correctness, MCP Execution Health, and Final State. It does not open a live browser. A separate web demo runs the same P0 evaluators against live Playwright MCP. External RAG and Langfuse SUTs are pytest paths, not CLI scenarios.
 
 Package: [`src/ai_qe_eval`](src/ai_qe_eval). Historical RAGAS POC scripts remain in the repo as a baseline; they are not the foundation for new work.
 
@@ -66,7 +66,7 @@ flowchart TD
 
 ## Quick Start
 
-Install from the repository root, then run the scripted MCP demo. The CLI does not start `@playwright/mcp`, a browser, or Langfuse.
+Install from the repository root, then run the scripted MCP demo. The CLI does not start `@playwright/mcp`, a browser, Langfuse, the external RAG API, or the user-feedback chatbot. RAG and Langfuse SUTs are not CLI scenarios.
 
 ```bash
 git clone https://github.com/atagare1/llm-rag-evaluation-ragas.git
@@ -77,9 +77,12 @@ pip install -r requirements.txt
 
 PYTHONPATH=src python -m ai_qe_eval
 PYTHONPATH=src python -m ai_qe_eval --scenario fail
+PYTHONPATH=src python -m ai_qe_eval.demo.web
 ```
 
-Exit codes: QualityGate PASS = `0`, FAIL = `1`.
+`python -m ai_qe_eval` is scripted (no browser). `python -m ai_qe_eval.demo.web` starts a local page that drives **live** Playwright MCP stdio against TodoMVC. Neither command runs the RAG demo or Langfuse.
+
+Exit codes for the CLI: QualityGate PASS = `0`, FAIL = `1`.
 
 ### PASS — correct tools, healthy execution, expected final state
 
@@ -181,35 +184,48 @@ Implemented in `integrations/playwright_mcp.py`, `playwright_mcp_agent.py`, and 
 * `run_playwright_mcp_agent` executes an injected selector and captures `ToolInvocation` values.
 * `mcp_p0_request()` is the Design A builder for the P0 evaluators.
 
-**Default CLI:** scripted session, no `npx`, no browser. **Live validation:** separate `@pytest.mark.live` tests start the real Playwright MCP server against TodoMVC. Those tests are not the Quick Start path.
+**Default CLI:** scripted session, no `npx`, no browser. **Live browser demo:** `python -m ai_qe_eval.demo.web`. **Live validation:** `@pytest.mark.live` tests start the real Playwright MCP server against TodoMVC. Those tests are not the CLI path.
 
 ### Langfuse
 
-Implemented in `integrations/langfuse_observations.py` and `capture/langfuse_trace.py`.
+Implemented in `integrations/langfuse_observations.py` and `capture/langfuse_trace.py`. Injected client. Paginates Observations API v2 `get_many`. Does not use `langfuse.trace()` or `api.trace.list`. The CLI does not call Langfuse.
 
-* Injected client. Paginates Observations API v2 `get_many` for one `trace_id` and waits for a settle predicate.
-* Converts `TOOL` observations into `ToolInvocation` values.
-* `ingest_langfuse_trace()` returns a Tool Correctness request map. Expected tool calls stay QE-supplied.
-* Does not use `langfuse.trace()` or `api.trace.list`.
-* The default CLI does not call Langfuse. Live Tool Correctness-through-runner tests are marked `live` and deselected from `pytest tests -q`.
+**Agent path** (`spikes/langfuse_openai_agents`): `get_many(trace_id=...)`. `TOOL` observations become `ToolInvocation` values. `ingest_langfuse_trace()` builds a Tool Correctness request map. Expected tool calls stay QE-supplied. A GENERATION mapper can build a G-Eval Correctness request (first user content, last assistant text; expected stays QE-supplied). That GENERATION path is unit-tested; it is not live-validated through Langfuse.
+
+**Chatbot path** (official Langfuse `applications/user-feedback` example, not in this repo): `get_many(session_id=..., fields including io)`. Root `handle-chat-message` observations with `is_root_observation=true` are sorted by `start_time`. Non-empty root `input`/`output` strings become `ConversationTurn` pairs, then Turn Relevancy and per-turn G-Eval request maps. Live tests require that chatbot already listening at `CHAT_BASE_URL` (default `http://127.0.0.1:3000`).
+
+---
+
+## Validated SUT paths
+
+These go through capture helpers and `EvaluationRunner`. They are **not** CLI scenarios.
+
+| SUT | Evidence | Live-validated through Runner | Unit-tested only |
+|---|---|---|---|
+| External RAG demo (`RAG_API_URL`) | `live_rag_demo_request`: live answer + retrieved contexts | RAGAS faithfulness | Adapter maps for answer relevancy, contextual relevancy/precision/recall, hallucination, and G-Eval correctness |
+| Langfuse OpenAI Agent | `get_many(trace_id=...)`; `TOOL` rows | Tool Correctness; Final State | G-Eval from GENERATION observations |
+| Langfuse user-feedback chatbot | `get_many(session_id=...)`; root `handle-chat-message` SPAN `input`/`output` | Turn Relevancy; per-turn G-Eval | Extraction and request-shape tests (same capabilities; not a second metric set) |
+
+The chatbot SUT is the official Langfuse example app, run separately. Tests skip if `CHAT_BASE_URL` is not reachable.
 
 ---
 
 ## Validation
 
-Deterministic baseline from `python -m pytest tests -q` (MVP-03, not re-measured by this README change):
+Phase 2 baseline, measured with `pytest tests -q` (excludes root Phase 1 files; `pytest.ini` applies `-m "not live"` and `-p no:deepeval`):
 
-**361 passed, 32 live tests deselected, 2 warnings.**
+**392 passed, 35 deselected, 1 warning** in 18.72s.
 
-`pytest.ini` sets `-m "not live"` and `-p no:deepeval`. DeepEval is pinned at 4.2.6. A remaining DeepEval `HallucinationMetric` score-direction notice is informational; platform hallucination scoring is already higher-is-better with policy `>= 0.8`.
+DeepEval is pinned at 4.2.6. The warning is a `HallucinationMetric` score-direction notice. Platform hallucination scoring is already higher-is-better with policy `>= 0.8`.
 
-Live tests (Playwright MCP, Langfuse, RAGAS/DeepEval provider runs) exist under `tests/platform/` and are excluded from that baseline. Do not treat the deterministic count as live-provider proof.
+`python -m pytest` uses `testpaths = .`, so it also collects four **unmarked** Phase 1 root tests. Those are not `@pytest.mark.live` and they are not `EvaluationRunner` tests. With the current OpenRouter `.env` they fail 401 (`Missing Authentication header`): `test_context_precision.py`, `test_context_recall.py`, `test_faithfulness.py`, `test_resp_relevancy_factual_correctness.py`. Last measured full collection: **395 passed, 4 failed, 35 deselected, 1 warning** in 33.67s. That is a Phase 1 provider-auth issue, not a Phase 2 regression.
 
-Live DeepEval judges use `OPENROUTER_API_KEY`, `OPENAI_BASE_URL` (OpenRouter), and optional `DEEPEVAL_JUDGE_MODEL` (default `meta-llama/llama-3.3-70b-instruct`). RAGAS defaults are unchanged.
+Live tests under `tests/platform/` (Playwright MCP, Langfuse, RAG demo, RAGAS/DeepEval judges) are deselected from `pytest tests -q`. Do not treat that count as live-provider proof. Live DeepEval judges use `OPENROUTER_API_KEY`, `OPENAI_BASE_URL` (OpenRouter), and optional `DEEPEVAL_JUDGE_MODEL` (default `meta-llama/llama-3.3-70b-instruct`). Live RAGAS Llama tests use the same OpenRouter pair; Phase 1 Mixtral/embedding defaults in `utils.py` are unchanged.
 
 ```bash
-pytest tests -q          # deterministic baseline
-pytest -m live           # live MCP / Langfuse / provider tests when configured
+pytest tests -q          # Phase 2 baseline (no root Phase 1 files, no live marker)
+python -m pytest         # also collects unmarked Phase 1 root tests (currently 401)
+pytest -m live --override-ini="addopts=-p no:deepeval"   # live platform tests when configured
 ```
 
 ---
@@ -221,8 +237,9 @@ pytest -m live           # live MCP / Langfuse / provider tests when configured
 * Design A request maps and thin `EvaluationRunner`
 * Registry, `EvaluationConfig`, result normalizer, `QualityPolicy`, `QualityGate`
 * Deterministic, RAGAS Faithfulness, and DeepEval evaluator adapters listed above
-* Playwright MCP capture/agent boundary and scripted CLI demo
-* Langfuse observation retrieval → Tool Correctness request map
+* Playwright MCP capture/agent boundary, scripted CLI, and live `ai_qe_eval.demo.web`
+* Langfuse Agent `trace_id`/TOOL path and chatbot `session_id`/root `handle-chat-message` path
+* External RAG demo capture (faithfulness live-validated through Runner)
 * Concise CLI report (no score aggregation)
 
 **Not implemented / future**
@@ -231,9 +248,10 @@ pytest -m live           # live MCP / Langfuse / provider tests when configured
 * Persistence, lineage, or a dashboard
 * Distributed execution
 * Security or adversarial evaluation
-* CLI coverage beyond the P0 MCP demo
+* CLI coverage beyond the P0 MCP demo (RAG and Langfuse are not CLI scenarios)
 * Remaining Phase 1 RAGAS metrics as Phase 2 adapters (context precision, context recall, response relevancy, factual correctness)
-* Default-CLI live browser or Langfuse execution
+* Default-CLI Langfuse or RAG execution
+* Live Langfuse G-Eval for the OpenAI Agent GENERATION path
 
 ---
 
@@ -255,9 +273,13 @@ Phase 1 thresholds in `utils.py` (`RAGAS_THRESHOLD_*`) are experimental POC gate
 
 ### Known live-integration issue (not a Phase 2 defect)
 
-With the file default judge `mistralai/Mixtral-8x7B-Instruct-v0.1`, Together returns `model_not_available` for serverless access. The four root live tests then fail (`test_context_precision.py`, `test_context_recall.py`, `test_faithfulness.py`, `test_resp_relevancy_factual_correctness.py`; the last also reports a missing/NaN `answer_relevancy` score). This is a Phase 1 provider/model availability issue. Phase 2 unit tests do not call Together.
+These four root files are historical Phase 1 RAGAS tests. They are **not** marked `live`, so `python -m pytest` collects them. They call the external RAG API and a judge through `conftest.py` / `utils.py` using `OPENAI_API_KEY` + `OPENAI_BASE_URL`. They do not use `EvaluationRunner`.
 
-Last measured during the Phase 2 freeze review: `pytest tests -q` — 206 passed. `pytest -q` — 206 passed and those 4 live failures. That count is historical. The current deterministic baseline is the Validation section above.
+The working `.env` points `OPENAI_BASE_URL` at OpenRouter. Phase 1 still sends `OPENAI_API_KEY` (Together-era / OpenAI-key placeholder) with the Mixtral id `mistralai/Mixtral-8x7B-Instruct-v0.1`. That combination currently returns **401 `Missing Authentication header`**. `test_resp_relevancy_factual_correctness.py` then also reports a missing/NaN `answer_relevancy` score.
+
+This is a Phase 1 provider-auth mismatch. Do not treat it as a Phase 2 or P2 regression. `pytest tests -q` does not collect these files.
+
+Historically, with Together as `OPENAI_BASE_URL`, the same Mixtral id returned `model_not_available` for serverless access. That Together wording is retained as history; the current measured failure is the 401 above. Freeze-review counts (`pytest tests -q` — 206 passed) are historical. The current baseline is the Validation section.
 
 ### Install and configure (Phase 1)
 
@@ -279,11 +301,11 @@ RAGAS_LLM_MODEL=mistralai/Mixtral-8x7B-Instruct-v0.1
 RAGAS_EMBEDDING_MODEL=intfloat/multilingual-e5-large-instruct
 ```
 
-Live tests skip when `OPENAI_API_KEY` is unset. `pytest.ini` puts `src` on `pythonpath` and disables the DeepEval pytest plugin (`-p no:deepeval`) so collection does not require DeepEval’s optional providers.
+Root Phase 1 tests skip the judge fixture when `OPENAI_API_KEY` is unset, but they are unmarked `live`, so a set key is enough for `python -m pytest` to run them. `pytest.ini` puts `src` on `pythonpath` and disables the DeepEval pytest plugin (`-p no:deepeval`) so collection does not require DeepEval’s optional providers.
 
 ```bash
-pytest          # unit tests plus live RAGAS tests when a key is set
-pytest tests -q # deterministic suite; no Together, RAG API, live MCP, or Langfuse
+pytest tests -q   # Phase 2 baseline; no root Phase 1 files
+python -m pytest  # also collects unmarked Phase 1 root tests (currently 401)
 ```
 
 Experimental Phase 1 gates: context precision `> 0.8`, context recall `> 0.7`, faithfulness `> 0.8`, answer relevancy `> 0.8`, factual correctness `> 0.8`.
@@ -328,7 +350,7 @@ Domain, policy, gate, normalizer, and runner do not import RAGAS or DeepEval. Ad
 | `tests/test_ragas_evaluator.py`, `tests/test_deepeval_*.py` | Adapter mapping with stubs. No live LLM. |
 | `tests/test_evaluation_runner.py`, `test_quality_policy.py`, `test_quality_gate.py` | Thin runner, policy, gate |
 | `tests/test_cli.py`, `tests/test_cli_mcp_p0_demo.py` | Scripted CLI report and MCP demo through `EvaluationRunner` |
-| `tests/platform/test_pv_*.py` | Platform validation, including `@pytest.mark.live` MCP / Langfuse / provider tests |
-| Root `test_*.py` | Phase 1 live RAGAS. Separate from the Phase 2 runner. |
+| `tests/platform/test_pv_*.py` | Platform validation, including `@pytest.mark.live` MCP / Langfuse / RAG / provider tests |
+| Root `test_*.py` | Unmarked Phase 1 RAGAS. Collected by `python -m pytest`, not by `pytest tests -q`. Separate from the Phase 2 runner. |
 
 End-to-end deterministic tests prove delegation order (`evaluator` → `normalizer` → `policy` → `gate`). They are not live RAGAS, DeepEval-provider, Playwright MCP server, or Langfuse runs.
