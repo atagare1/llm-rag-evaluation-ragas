@@ -8,6 +8,8 @@ Playwright MCP is the interactive CLI/web flagship demo. External RAG, Langfuse 
 
 Package: [`src/ai_qe_eval`](src/ai_qe_eval). Historical RAGAS POC scripts remain in the repo as a baseline; they are not the foundation for new work.
 
+Technical companion: [Architecture](docs/architecture.md). Validation evidence and strategy: [Platform validation strategy](docs/platform-validation-strategy.md).
+
 | Layer | What it is | Status |
 |---|---|---|
 | Phase 1 | RAGAS POC (Together AI + external RAG demo) | Historical / retained |
@@ -15,6 +17,18 @@ Package: [`src/ai_qe_eval`](src/ai_qe_eval). Historical RAGAS POC scripts remain
 | Phase 3+ | MCP / Langfuse capture, CLI, flagship demo | Implemented for the scope below |
 
 Future work must extend the Phase 2 contracts. Do not grow new framework behavior by editing the original RAGAS pytest scripts.
+
+### Why this project?
+
+AI systems fail in different domains. A RAG answer can be irrelevant or unfaithful even when retrieval returns context. An agent can choose the wrong tool or trajectory. An MCP workflow can execute every tool correctly and still reach the wrong final state. The evaluator or judge can fail independently of the system under test. This platform scores those failures separately so a judge outage is not reported as an application defect.
+
+### What makes this different?
+
+* **Evidence-driven evaluation** — scores come from captured observations (tools, snapshots, retrieved contexts, conversation turns), not from one opaque model score.
+* **Provider-agnostic evaluation core** — domain, policy, gate, and runner do not import RAGAS or DeepEval. Adapters do.
+* **SUT / evaluator separation** — the system under test is measured independently of the judge that scores it.
+* **Fail-closed quality gates** — `QualityGate` fails the run if any policy fails.
+* **Independent gates per SUT path** — RAG, Agent, MCP, and Chatbot are never averaged into one platform score.
 
 ---
 
@@ -228,7 +242,7 @@ DeepEval is pinned at 4.2.6. The warning is a `HallucinationMetric` score-direct
 
 ### Final live MVP matrix
 
-Live DeepEval / RAGAS Llama judges use `OPENROUTER_API_KEY`, `OPENAI_BASE_URL` (OpenRouter), and optional `DEEPEVAL_JUDGE_MODEL` (default `meta-llama/llama-3.3-70b-instruct`). Phase 1 Mixtral/embedding defaults in `utils.py` are unchanged. Agent GENERATION G-Eval and non-faithfulness RAG maps remain unit-tested only.
+Live DeepEval and RAGAS evaluation paths are configured for OpenRouter (`OPENROUTER_API_KEY`, `OPENAI_BASE_URL`, optional `DEEPEVAL_JUDGE_MODEL` default `meta-llama/llama-3.3-70b-instruct`). The final RAGAS Faithfulness run was judge-blocked by `LLMDidNotFinishException`. Phase 1 Mixtral/embedding defaults in `utils.py` are unchanged. Agent GENERATION G-Eval and non-faithfulness RAG maps remain unit-tested only.
 
 | Path | Live through EvaluationRunner | Result |
 |---|---|---|
@@ -236,6 +250,8 @@ Live DeepEval / RAGAS Llama judges use `OPENROUTER_API_KEY`, `OPENAI_BASE_URL` (
 | Playwright MCP | Tool Correctness; MCP Execution Health; Final State | **Pass**, including expected-negative cases (wrong final state; wrong tool order; execution error) |
 | Langfuse user-feedback chatbot | Turn Relevancy; per-turn G-Eval | Turn Relevancy **1.0**; G-Eval **0.8 / 0.8**; QualityGate **pass** |
 | External RAG Faithfulness | SUT extraction, then RAGAS Faithfulness | **JUDGE_BLOCKED / NOT SCORED.** SUT returned a live answer and **4** retrieved contexts. The RAGAS judge then raised `LLMDidNotFinishException` (`max_tokens`). No score and no QualityGate. This is not an SUT or extraction failure. |
+
+**RAG diagnostic lesson.** The external RAG API returned **HTTP 200** with a valid answer and **4** retrieved contexts. The downstream RAGAS judge then failed with `LLMDidNotFinishException`. That is failure-domain isolation: the SUT succeeded; the judge did not. It is not an RAG application failure and not a Faithfulness score.
 
 ```bash
 pytest tests -q          # Phase 2 baseline (no root Phase 1 files, no live marker)
