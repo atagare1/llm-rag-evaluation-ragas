@@ -1,8 +1,10 @@
 # AI-QE Evaluation Platform
 
-Agent and RAG quality is not one score. Tool order can be correct while the application state is wrong. A retrieved context can be relevant while the answer is unfaithful. This repository is a provider-agnostic evaluation engine for that class of problem: separate metrics, explicit policies, and one fail-closed QualityGate.
+One provider-agnostic evaluation engine, four independently gated AI system paths.
 
-The default CLI is a **scripted** Playwright MCP TodoMVC evaluation: observed tool calls are captured, mapped into a Design A request, and scored by Tool Correctness, MCP Execution Health, and Final State. It does not open a live browser. A separate web demo runs the same P0 evaluators against live Playwright MCP. External RAG and Langfuse SUTs are pytest paths, not CLI scenarios.
+External RAG, Langfuse OpenAI Agent, Playwright MCP, and Langfuse user-feedback Chatbot each produce a request map. `EvaluationRunner` executes injected evaluators, `QualityPolicy` applies thresholds, and `QualityGate` decides **per path**. There is no combined platform score, pass rate, or averaged result.
+
+Playwright MCP is the interactive CLI/web flagship demo. External RAG, Langfuse Agent, and the Chatbot are validated through integration and live tests, not CLI scenarios.
 
 Package: [`src/ai_qe_eval`](src/ai_qe_eval). Historical RAGAS POC scripts remain in the repo as a baseline; they are not the foundation for new work.
 
@@ -18,48 +20,52 @@ Future work must extend the Phase 2 contracts. Do not grow new framework behavio
 
 ## Architecture
 
-Sources produce observations. Capture helpers extract `ToolInvocation` values. Those become a capability-keyed request map. `EvaluationRunner` is the only executor.
+Four SUT paths produce Design A request maps. `EvaluationRunner` is the only executor. `QualityGate` is fail-closed **per path**. Paths are never folded into one platform score.
 
 ```text
-source (scripted MCP, live Playwright MCP, or Langfuse observations)
-        ↓
-extraction (serialize / parse → ToolInvocation)
-        ↓
-Design A request map     {"capability": {"args": [...], "kwargs": {...}}}
-        +
-EvaluationConfig         (ordered capability names)
-        ↓
-EvaluationRunner
-        ↓
-Evaluator.evaluate(*args, **kwargs) → EvaluationResult[]
-        ↓
-normalize_many
-        ↓
-QualityPolicy.apply      (one policy per result metric)
-        ↓
-QualityGate.evaluate     (any policy fail fails the run)
-        ↓
-GateDecision + CLI report
+External RAG ──────────────────► live_rag_demo_request ──────────────► faithfulness
+Langfuse OpenAI Agent ─────────► get_many(trace_id) / TOOL ──────────► tool_correctness + final_state
+Playwright MCP ────────────────► mcp_p0_request ─────────────────────► tool_correctness + health + final_state
+Langfuse user-feedback Chatbot ► get_many(session_id) / root SPAN ───► turn_relevancy + per-turn G-Eval
+                                         │
+                                         ▼
+                                 EvaluationRunner
+                                         │
+                                         ▼
+                                 QualityPolicy.apply     (one policy per result metric)
+                                         │
+                                         ▼
+                                 QualityGate.evaluate    (per path; any-fail)
+                                         │
+                                         ▼
+                    CLI / demo.web (MCP flagship)  |  pytest live matrix (all four)
 ```
 
-There is no score average, pass rate, or combined run score. `EvaluationResult.score` is not pass/fail. `QualityPolicy` owns the threshold comparison. `QualityGate` is an in-process any-fail decision, not a CI or deployment plugin.
+`EvaluationResult.score` is not pass/fail. `QualityPolicy` owns the threshold comparison. `QualityGate` is an in-process any-fail decision for that run, not a CI plugin and not a combined score across SUTs.
+
+MCP is the interactive flagship: `python -m ai_qe_eval` (scripted) and `python -m ai_qe_eval.demo.web` (live browser). RAG, Agent, and Chatbot use the same runner through pytest, not CLI scenarios.
 
 ```mermaid
 flowchart TD
-    S[Source] --> X[Extraction]
-    X --> T[Request map]
-    T --> R[EvaluationRunner.run]
+    RAG[External RAG]
+    AG[Langfuse OpenAI Agent]
+    MCP[Playwright MCP]
+    CH[Langfuse user-feedback Chatbot]
+    RAG --> REQ[Request map]
+    AG --> REQ
+    MCP --> REQ
+    CH --> REQ
+    REQ --> R[EvaluationRunner]
     C[EvaluationConfig] --> R
-    Reg[EvaluationRegistry catalog lookup] --> R
-    Inj[Injected evaluators and QualityPolicy map] --> R
+    Reg[EvaluationRegistry] --> R
+    Inj[Evaluators and QualityPolicy map] --> R
     R --> E[Evaluator.evaluate]
     E --> F[EvaluationResult list]
-    F --> G[normalize_many]
-    G --> H[QualityPolicy.apply]
-    H --> PD[PolicyDecision list]
-    PD --> I[QualityGate.evaluate]
-    I --> J[GateDecision]
-    J --> K[CLI report]
+    F --> N[normalize_many]
+    N --> P[QualityPolicy.apply]
+    P --> G[QualityGate per path]
+    G --> MCPOut[CLI / demo.web MCP flagship]
+    G --> Live[pytest live matrix]
 ```
 
 ---
@@ -198,13 +204,13 @@ Implemented in `integrations/langfuse_observations.py` and `capture/langfuse_tra
 
 ## Validated SUT paths
 
-These go through capture helpers and `EvaluationRunner`. They are **not** CLI scenarios.
+These go through capture helpers and `EvaluationRunner`. Playwright MCP is the CLI/web flagship. External RAG, Langfuse Agent, and the Chatbot are not CLI scenarios.
 
 | SUT | Evidence | Live-validated through Runner | Unit-tested only |
 |---|---|---|---|
-| External RAG demo (`RAG_API_URL`) | `live_rag_demo_request`: live answer + retrieved contexts | RAGAS faithfulness | Adapter maps for answer relevancy, contextual relevancy/precision/recall, hallucination, and G-Eval correctness |
-| Langfuse OpenAI Agent | `get_many(trace_id=...)`; `TOOL` rows | Tool Correctness; Final State | G-Eval from GENERATION observations |
-| Langfuse user-feedback chatbot | `get_many(session_id=...)`; root `handle-chat-message` SPAN `input`/`output` | Turn Relevancy; per-turn G-Eval | Extraction and request-shape tests (same capabilities; not a second metric set) |
+| External RAG demo (`RAG_API_URL`) | `live_rag_demo_request`: live answer + retrieved contexts | SUT extraction confirmed; latest Faithfulness **JUDGE_BLOCKED / NOT SCORED** (no score/gate) | Adapter maps for answer relevancy, contextual relevancy/precision/recall, hallucination, and G-Eval correctness |
+| Langfuse OpenAI Agent | `get_many(trace_id=...)`; `TOOL` rows | Tool Correctness; Final State (including expected-negative cases) | G-Eval from GENERATION observations |
+| Langfuse user-feedback chatbot | `get_many(session_id=...)`; root `handle-chat-message` SPAN `input`/`output` | Turn Relevancy **1.0**; per-turn G-Eval **0.8 / 0.8**; gate pass | Extraction and request-shape tests (same capabilities; not a second metric set) |
 
 The chatbot SUT is the official Langfuse example app, run separately. Tests skip if `CHAT_BASE_URL` is not reachable.
 
@@ -212,15 +218,24 @@ The chatbot SUT is the official Langfuse example app, run separately. Tests skip
 
 ## Validation
 
-Phase 2 baseline, measured with `pytest tests -q` (excludes root Phase 1 files; `pytest.ini` applies `-m "not live"` and `-p no:deepeval`):
+Phase 2 regression baseline, measured with `pytest tests -q` (excludes root Phase 1 files; `pytest.ini` applies `-m "not live"` and `-p no:deepeval`):
 
-**392 passed, 35 deselected, 1 warning** in 18.72s.
+**392 passed, 35 deselected, 1 warning** in 19.30s.
 
-DeepEval is pinned at 4.2.6. The warning is a `HallucinationMetric` score-direction notice. Platform hallucination scoring is already higher-is-better with policy `>= 0.8`.
+DeepEval is pinned at 4.2.6. The warning is a `HallucinationMetric` score-direction notice. Platform hallucination scoring is already higher-is-better with policy `>= 0.8`. Do not treat this count as live-provider proof.
 
 `python -m pytest` uses `testpaths = .`, so it also collects four **unmarked** Phase 1 root tests. Those are not `@pytest.mark.live` and they are not `EvaluationRunner` tests. With the current OpenRouter `.env` they fail 401 (`Missing Authentication header`): `test_context_precision.py`, `test_context_recall.py`, `test_faithfulness.py`, `test_resp_relevancy_factual_correctness.py`. Last measured full collection: **395 passed, 4 failed, 35 deselected, 1 warning** in 33.67s. That is a Phase 1 provider-auth issue, not a Phase 2 regression.
 
-Live tests under `tests/platform/` (Playwright MCP, Langfuse, RAG demo, RAGAS/DeepEval judges) are deselected from `pytest tests -q`. Do not treat that count as live-provider proof. Live DeepEval judges use `OPENROUTER_API_KEY`, `OPENAI_BASE_URL` (OpenRouter), and optional `DEEPEVAL_JUDGE_MODEL` (default `meta-llama/llama-3.3-70b-instruct`). Live RAGAS Llama tests use the same OpenRouter pair; Phase 1 Mixtral/embedding defaults in `utils.py` are unchanged.
+### Final live MVP matrix
+
+Live DeepEval / RAGAS Llama judges use `OPENROUTER_API_KEY`, `OPENAI_BASE_URL` (OpenRouter), and optional `DEEPEVAL_JUDGE_MODEL` (default `meta-llama/llama-3.3-70b-instruct`). Phase 1 Mixtral/embedding defaults in `utils.py` are unchanged. Agent GENERATION G-Eval and non-faithfulness RAG maps remain unit-tested only.
+
+| Path | Live through EvaluationRunner | Result |
+|---|---|---|
+| Langfuse OpenAI Agent | Tool Correctness; Final State | **Pass**, including expected-negative cases (wrong tool order; wrong expected title) |
+| Playwright MCP | Tool Correctness; MCP Execution Health; Final State | **Pass**, including expected-negative cases (wrong final state; wrong tool order; execution error) |
+| Langfuse user-feedback chatbot | Turn Relevancy; per-turn G-Eval | Turn Relevancy **1.0**; G-Eval **0.8 / 0.8**; QualityGate **pass** |
+| External RAG Faithfulness | SUT extraction, then RAGAS Faithfulness | **JUDGE_BLOCKED / NOT SCORED.** SUT returned a live answer and **4** retrieved contexts. The RAGAS judge then raised `LLMDidNotFinishException` (`max_tokens`). No score and no QualityGate. This is not an SUT or extraction failure. |
 
 ```bash
 pytest tests -q          # Phase 2 baseline (no root Phase 1 files, no live marker)
@@ -239,7 +254,7 @@ pytest -m live --override-ini="addopts=-p no:deepeval"   # live platform tests w
 * Deterministic, RAGAS Faithfulness, and DeepEval evaluator adapters listed above
 * Playwright MCP capture/agent boundary, scripted CLI, and live `ai_qe_eval.demo.web`
 * Langfuse Agent `trace_id`/TOOL path and chatbot `session_id`/root `handle-chat-message` path
-* External RAG demo capture (faithfulness live-validated through Runner)
+* External RAG demo capture (live SUT extraction; latest Faithfulness judge-blocked)
 * Concise CLI report (no score aggregation)
 
 **Not implemented / future**
