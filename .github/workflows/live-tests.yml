@@ -1,0 +1,65 @@
+﻿# Opt-in live RAGAS Faithfulness smoke. Calls the external RAG SUT and an
+# OpenRouter judge. This workflow may incur API costs. Trigger it only
+# through workflow_dispatch.
+name: live-tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ragas-faithfulness-smoke:
+    name: RAGAS faithfulness smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+      RAG_API_URL: ${{ secrets.RAG_API_URL }}
+      # get_test_data skips unless OPENAI_API_KEY is set. Use the real
+      # OpenRouter key so the intended live test is not skipped.
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run live RAGAS faithfulness smoke
+        run: |
+          python -m pytest tests/platform/test_pv_e_ragas_faithfulness_llama_smoke.py \
+            --override-ini="addopts=-p no:deepeval" \
+            -m live \
+            --tb=short \
+            --junitxml=live-faithfulness.xml \
+            -ra
+          python <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("live-faithfulness.xml").getroot()
+          suites = []
+          if root.tag == "testsuite":
+              suites.append(root)
+          suites.extend(root.findall(".//testsuite"))
+          cases = []
+          if root.tag == "testcase":
+              cases.append(root)
+          cases.extend(root.findall(".//testcase"))
+
+          tests = sum(int(suite.get("tests") or 0) for suite in suites)
+          skipped = sum(int(suite.get("skipped") or 0) for suite in suites)
+          if tests == 0:
+              tests = len(cases)
+          skipped = max(
+              skipped,
+              sum(1 for case in cases if case.find("skipped") is not None),
+          )
+          if tests < 1:
+              sys.exit("intended live test was not collected")
+          if skipped:
+              sys.exit("intended live test was skipped")
+          PY
