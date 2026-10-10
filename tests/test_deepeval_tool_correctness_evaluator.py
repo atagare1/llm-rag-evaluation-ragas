@@ -238,6 +238,7 @@ def test_evaluation_params_can_select_input_parameters_only():
 
     assert captured["evaluation_params"] == [ToolCallParams.INPUT_PARAMETERS]
     assert captured["should_exact_match"] is True
+    assert captured["model"] is None
 
 
 def test_adapter_does_not_import_mcp_or_evaluation_trace():

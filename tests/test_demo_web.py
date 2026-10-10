@@ -41,6 +41,7 @@ from ai_qe_eval.integrations.playwright_mcp import (
     snapshot_body_from_serialized_result,
 )
 from ai_qe_eval.runner.evaluation_runner import EvaluationRunner
+from tool_correctness_test_doubles import UnusedToolCorrectnessJudge
 
 
 class _RecordingClientSession:
@@ -108,7 +109,12 @@ def test_execute_demo_pass_uses_stdio_client_session_not_scripted(monkeypatch):
     def on_tool_call(invocation: ToolInvocation, *, order: int) -> None:
         seen.append((order, invocation))
 
-    run = execute_demo("pass", on_tool_call=on_tool_call, pace_s=0)
+    run = execute_demo(
+        "pass",
+        on_tool_call=on_tool_call,
+        pace_s=0,
+        model=UnusedToolCorrectnessJudge(),
+    )
     payload = build_demo_payload(run, "pass")
     session = recorded["sessions"][0]
     params = recorded["params"]
@@ -154,7 +160,12 @@ def test_execute_demo_fail_types_buy_bread_on_live_session(monkeypatch):
     def on_tool_call(invocation: ToolInvocation, *, order: int) -> None:
         seen.append(invocation.name)
 
-    run = execute_demo("fail", on_tool_call=on_tool_call, pace_s=0)
+    run = execute_demo(
+        "fail",
+        on_tool_call=on_tool_call,
+        pace_s=0,
+        model=UnusedToolCorrectnessJudge(),
+    )
     payload = build_demo_payload(run, "fail")
     session = recorded["sessions"][0]
     results = {result.metric: result for result in run.results}

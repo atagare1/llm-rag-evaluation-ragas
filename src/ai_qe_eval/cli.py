@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import sys
 from collections.abc import Sequence
+from typing import Any
 
 from ai_qe_eval.demo.mcp_p0 import scripted_mcp_p0_request
 from ai_qe_eval.domain.config import EvaluationConfig
@@ -53,8 +54,16 @@ def demo_request(scenario: str = "pass") -> dict[str, dict[str, list]]:
     return asyncio.run(scripted_mcp_p0_request(scenario))
 
 
-def build_p0_runner() -> EvaluationRunner:
-    """Wire the existing P0 evaluators, policies, and gate. Not a new runner."""
+def build_p0_runner(
+    *,
+    tool_correctness_metric: Any | None = None,
+    model: Any | None = None,
+) -> EvaluationRunner:
+    """Wire the existing P0 evaluators, policies, and gate. Not a new runner.
+
+    model and tool_correctness_metric are passed through unchanged. Omitting
+    both uses DeepEval's default provider when the metric is constructed.
+    """
     registry = EvaluationRegistry()
     registry.register(
         EvaluationCapability(
@@ -82,6 +91,8 @@ def build_p0_runner() -> EvaluationRunner:
         evaluators={
             TOOL_CORRECTNESS_METRIC: DeepEvalToolCorrectnessEvaluator(
                 evaluation_params=[],
+                tool_correctness_metric=tool_correctness_metric,
+                model=model,
             ),
             MCP_EXECUTION_HEALTH_METRIC: MCPExecutionHealthEvaluator(),
             FINAL_STATE_METRIC: FinalStateEvaluator(),
@@ -143,8 +154,16 @@ def format_run(run: EvaluationRun, *, scenario: str = "MCP P0 Demo") -> str:
     return "\n".join(lines)
 
 
-def run_demo(scenario: str = "pass") -> EvaluationRun:
-    runner = build_p0_runner()
+def run_demo(
+    scenario: str = "pass",
+    *,
+    tool_correctness_metric: Any | None = None,
+    model: Any | None = None,
+) -> EvaluationRun:
+    runner = build_p0_runner(
+        tool_correctness_metric=tool_correctness_metric,
+        model=model,
+    )
     runner.run(
         demo_request(scenario),
         EvaluationConfig(evaluations=list(P0_EVALUATIONS)),

@@ -104,6 +104,8 @@ def execute_demo(
     *,
     on_tool_call: Callable[..., Any] | None = None,
     pace_s: float = 0.0,
+    tool_correctness_metric: Any | None = None,
+    model: Any | None = None,
 ) -> EvaluationRun:
     """Run live Playwright MCP + existing Runner. Timeline rows come from on_tool_call."""
     if scenario not in {"pass", "fail"}:
@@ -117,7 +119,10 @@ def execute_demo(
 
     hook = _hook if on_tool_call is not None or pace_s > 0 else None
     request = asyncio.run(live_mcp_p0_request(scenario, on_tool_call=hook))
-    runner = build_p0_runner()
+    runner = build_p0_runner(
+        tool_correctness_metric=tool_correctness_metric,
+        model=model,
+    )
     runner.run(
         request,
         EvaluationConfig(evaluations=list(P0_EVALUATIONS)),

@@ -6,7 +6,12 @@ No live Playwright MCP server. No Langfuse.
 
 from __future__ import annotations
 
+from ai_qe_eval import cli as cli_mod
 from ai_qe_eval.cli import P0_EVALUATIONS, main, run_demo
+from tool_correctness_test_doubles import (
+    UnusedToolCorrectnessJudge,
+    install_explicit_p0_tool_correctness_stub,
+)
 from ai_qe_eval.demo.mcp_p0 import (
     EXPECTED_TODO_TEXT,
     EXPECTED_TOOL_ORDER,
@@ -39,7 +44,7 @@ def test_cli_pass_demo_reaches_evaluation_runner(monkeypatch):
 
     monkeypatch.setattr(EvaluationRunner, "run", _recording_run)
 
-    run = run_demo("pass")
+    run = run_demo("pass", model=UnusedToolCorrectnessJudge())
     request = run.requests[0]
     observed = request["tool_correctness"]["args"][0]
     expected = request["tool_correctness"]["args"][1]
@@ -72,7 +77,7 @@ def test_cli_fail_demo_reuses_final_state_mismatch_and_reaches_runner(monkeypatc
 
     monkeypatch.setattr(EvaluationRunner, "run", _recording_run)
 
-    run = run_demo("fail")
+    run = run_demo("fail", model=UnusedToolCorrectnessJudge())
     request = run.requests[0]
     observed = request["tool_correctness"]["args"][0]
     results = {result.metric: result for result in run.results}
@@ -92,7 +97,8 @@ def test_cli_fail_demo_reuses_final_state_mismatch_and_reaches_runner(monkeypatc
     assert decisions[FINAL_STATE_METRIC].passed is False
 
 
-def test_cli_pass_and_fail_exit_codes(capsys):
+def test_cli_pass_and_fail_exit_codes(capsys, monkeypatch):
+    install_explicit_p0_tool_correctness_stub(monkeypatch, cli_mod)
     assert main(["--scenario", "pass"]) == 0
     pass_output = capsys.readouterr().out
     assert "Quality Gate                         PASS" in pass_output

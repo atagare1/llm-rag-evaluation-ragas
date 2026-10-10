@@ -127,6 +127,11 @@ class DeepEvalToolCorrectnessEvaluator:
     Default evaluation_params compare INPUT_PARAMETERS and OUTPUT.
     Pass evaluation_params to override that default when constructing the
     metric. An injected tool_correctness_metric takes precedence.
+
+    The default metric is built on first evaluate() and uses the
+    caller-supplied model. model=None is passed through to DeepEval, which
+    initializes its default provider and fails if that provider is not
+    configured. Deterministic tests must inject a metric or model.
     """
 
     def __init__(

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 from deepeval.metrics.tool_correctness.tool_correctness import ToolCorrectnessMetric
+from deepeval.models.base_model import DeepEvalBaseLLM
 from mcp.types import CallToolResult, TextContent
 
 from ai_qe_eval.capture.mcp_trace import (
@@ -57,6 +58,22 @@ _TODO_SNAPSHOT = f"""
     - listitem [ref=e10]:
       - generic [ref=e12]: {EXPECTED_TODO_TEXT}
 """.strip()
+
+
+class UnusedToolCorrectnessJudge(DeepEvalBaseLLM):
+    """Explicit unused judge so this test does not use DeepEval's default provider."""
+
+    def get_model_name(self) -> str:
+        return "unused-tool-correctness-judge"
+
+    def load_model(self):
+        return self
+
+    def generate(self, prompt: str, *args, **kwargs):
+        raise AssertionError("scripted P0 name/order scoring must not call a judge")
+
+    async def a_generate(self, prompt: str, *args, **kwargs):
+        raise AssertionError("scripted P0 name/order scoring must not call a judge")
 
 
 class FakeSession:
@@ -121,7 +138,7 @@ async def test_scripted_executor_through_p0_runner_gate_passes():
         evaluation_params=[],
         include_reason=True,
         async_mode=False,
-        model=None,
+        model=UnusedToolCorrectnessJudge(),
     )
     runner = _p0_runner(metric)
     decision = runner.run(

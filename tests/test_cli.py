@@ -5,8 +5,13 @@ Uses the deterministic demo fixture. No live MCP or Langfuse.
 
 from __future__ import annotations
 
+from ai_qe_eval import cli as cli_mod
 from ai_qe_eval.cli import P0_EVALUATIONS, format_run, main, run_demo
 from ai_qe_eval.domain.result import EvaluationResult
+from tool_correctness_test_doubles import (
+    UnusedToolCorrectnessJudge,
+    install_explicit_p0_tool_correctness_stub,
+)
 from ai_qe_eval.domain.run import EvaluationRun
 from ai_qe_eval.evaluators.deterministic import FINAL_STATE_FAILED_REASON
 from ai_qe_eval.gate.quality_gate import GateDecision
@@ -124,7 +129,8 @@ def test_format_run_fail_shows_fail_and_evaluator_reason():
     assert FINAL_STATE_FAILED_REASON in report
 
 
-def test_cli_demo_pass_prints_report_and_exits_zero(capsys):
+def test_cli_demo_pass_prints_report_and_exits_zero(capsys, monkeypatch):
+    install_explicit_p0_tool_correctness_stub(monkeypatch, cli_mod)
     exit_code = main(["--scenario", "pass"])
     output = capsys.readouterr().out.strip()
 
@@ -133,7 +139,8 @@ def test_cli_demo_pass_prints_report_and_exits_zero(capsys):
     assert "Quality Gate                         FAIL" not in output
 
 
-def test_cli_demo_fail_prints_report_and_exits_nonzero(capsys):
+def test_cli_demo_fail_prints_report_and_exits_nonzero(capsys, monkeypatch):
+    install_explicit_p0_tool_correctness_stub(monkeypatch, cli_mod)
     exit_code = main(["--scenario", "fail"])
     output = capsys.readouterr().out.strip()
 
@@ -143,7 +150,7 @@ def test_cli_demo_fail_prints_report_and_exits_nonzero(capsys):
 
 
 def test_cli_run_demo_uses_existing_runner_and_does_not_aggregate():
-    run = run_demo("fail")
+    run = run_demo("fail", model=UnusedToolCorrectnessJudge())
     report = format_run(run)
 
     assert run.gate_decision is not None
