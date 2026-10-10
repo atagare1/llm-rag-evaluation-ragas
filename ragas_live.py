@@ -12,6 +12,7 @@ import pytest
 from langchain_openai import ChatOpenAI
 
 DEFAULT_RAGAS_LLAMA_JUDGE_MODEL = "meta-llama/llama-3.3-70b-instruct"
+DEFAULT_RAGAS_LLAMA_MAX_TOKENS = 4096
 
 
 def ragas_llama_judge_model_name() -> str:
@@ -31,4 +32,5 @@ def live_ragas_llama_chat() -> ChatOpenAI:
         temperature=0,
         api_key=api_key,
         base_url=base_url,
+        max_tokens=DEFAULT_RAGAS_LLAMA_MAX_TOKENS,
     )
