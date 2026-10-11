@@ -134,6 +134,9 @@ jobs:
     name: Playwright MCP
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -145,6 +148,12 @@ jobs:
       - name: Require npx
         run: |
           command -v npx >/dev/null || { echo "ERROR: npx is required"; exit 1; }
+      - name: Require OpenRouter credentials
+        run: |
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            echo "ERROR: repository secret OPENROUTER_API_KEY is required"
+            exit 1
+          fi
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Run required Playwright MCP live tests

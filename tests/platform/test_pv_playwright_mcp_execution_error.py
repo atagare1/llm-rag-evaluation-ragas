@@ -14,6 +14,7 @@ import shutil
 
 import pytest
 from deepeval.metrics.tool_correctness.tool_correctness import ToolCorrectnessMetric
+from deepeval_live import live_deepeval_local_model
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
@@ -127,7 +128,7 @@ async def test_pv_playwright_mcp_execution_error_preserved_scenario_not_successf
         evaluation_params=[],
         include_reason=True,
         async_mode=False,
-        model=None,
+        model=live_deepeval_local_model(),
     )
     runner = _p0_runner(metric)
     decision = runner.run(

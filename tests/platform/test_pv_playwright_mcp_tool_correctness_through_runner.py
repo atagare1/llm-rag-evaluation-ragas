@@ -13,6 +13,7 @@ import shutil
 import pytest
 from deepeval.metrics.tool_correctness.tool_correctness import ToolCorrectnessMetric
 from deepeval.test_case import ToolCallParams
+from deepeval_live import live_deepeval_local_model
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
@@ -67,7 +68,7 @@ async def test_pv_playwright_mcp_tool_correctness_through_runner():
         evaluation_params=[ToolCallParams.INPUT_PARAMETERS],
         include_reason=True,
         async_mode=False,
-        model=None,
+        model=live_deepeval_local_model(),
     )
     policy = QualityPolicy(
         metric="tool_correctness",
