@@ -1,6 +1,6 @@
-﻿# Opt-in live RAGAS Faithfulness smoke. Calls the external RAG SUT and an
-# OpenRouter judge. This workflow may incur API costs. Trigger it only
-# through workflow_dispatch.
+﻿# Opt-in live RAGAS Faithfulness smoke. Calls the external RAG SUT and a
+# Together AI Llama Turbo judge. This workflow may incur API costs.
+# Trigger it only through workflow_dispatch.
 name: live-tests
 
 on:
@@ -15,14 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-      RAG_API_URL: ${{ secrets.RAG_API_URL }}
-      # get_test_data skips unless OPENAI_API_KEY is set. Use the real
-      # OpenRouter key so the intended live test is not skipped.
-      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      RAGAS_LLM_PROVIDER: together
+      TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
+      OPENAI_BASE_URL: https://api.together.xyz/v1
+      # get_test_data skips unless OPENAI_API_KEY is set. Presence gate only;
+      # the Together judge uses TOGETHER_API_KEY.
+      OPENAI_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Validated Together helper + smoke on phase3_code.
+          ref: 4ef0d39
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
