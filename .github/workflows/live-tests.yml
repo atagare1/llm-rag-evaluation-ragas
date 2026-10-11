@@ -1,65 +1,268 @@
-# Opt-in live RAGAS Faithfulness smoke. Calls the external RAG SUT and a
-# Together AI Llama Turbo judge. This workflow may incur API costs.
-# Trigger it only through workflow_dispatch.
+# Opt-in live integration tests. Manual only; never runs on push/PR.
+#
+# Inventory: 34 live tests selected by this workflow (3+18+6+5+2).
+# Intentionally excluded from CI: tests/platform/test_pv_e_ragas_faithfulness_smoke.py
+# (legacy Phase 1 Mixtral llm_wrapper smoke). The file is preserved in the repo.
+#
+# Required jobs (missing secrets or skips fail the job):
+#   ragas          Together AI judge + RAG SUT (3)
+#   deepeval       OpenRouter LocalModel judge (18)
+#   playwright-mcp Node/npx + @playwright/mcp@0.0.82 (6)
+#
+# Opt-in jobs (workflow_dispatch inputs; chatbot/agent cannot be
+# assumed available in GitHub-hosted runners):
+#   langfuse-agent         spikes/langfuse_openai_agents (5)
+#   langfuse-chatbot       official user-feedback chatbot at CHAT_BASE_URL (2)
 name: live-tests
 
 on:
   workflow_dispatch:
+    inputs:
+      run_langfuse_agent:
+        description: Run Langfuse OpenAI-agents spike live tests (opt-in)
+        type: boolean
+        default: false
+      run_langfuse_chatbot:
+        description: Run Langfuse chatbot live tests (opt-in; chatbot must already be reachable)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
-  ragas-faithfulness-smoke:
-    name: RAGAS faithfulness smoke
+  ragas:
+    name: RAGAS Together
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       RAGAS_LLM_PROVIDER: together
       TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
       OPENAI_BASE_URL: https://api.together.xyz/v1
-      # get_test_data skips unless OPENAI_API_KEY is set. Presence gate only;
-      # the Together judge uses TOGETHER_API_KEY.
       OPENAI_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Require Together credentials
+        run: |
+          if [ -z "${TOGETHER_API_KEY}" ]; then
+            echo "ERROR: repository secret TOGETHER_API_KEY is required"
+            exit 1
+          fi
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Run live RAGAS faithfulness smoke
+      - name: Run required RAGAS live tests
         run: |
-          python -m pytest tests/platform/test_pv_e_ragas_faithfulness_llama_smoke.py \
+          python -m pytest \
+            tests/platform/test_pv_e_ragas_faithfulness_llama_smoke.py \
+            tests/platform/test_pv_e1_ragas_faithfulness_through_runner.py \
+            tests/platform/test_pv_rag_demo_through_runner.py \
             --override-ini="addopts=-p no:deepeval" \
             -m live \
             --tb=short \
-            --junitxml=live-faithfulness.xml \
+            --junitxml=live-ragas.xml \
             -ra
-          python <<'PY'
-          import sys
-          import xml.etree.ElementTree as ET
+      - name: Upload RAGAS JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-ragas-junit
+          path: live-ragas.xml
+          if-no-files-found: error
+      - name: Reject skipped or uncollected RAGAS tests
+        run: python .github/scripts/require_live_junit.py live-ragas.xml --min-tests 3
 
-          root = ET.parse("live-faithfulness.xml").getroot()
-          suites = []
-          if root.tag == "testsuite":
-              suites.append(root)
-          suites.extend(root.findall(".//testsuite"))
-          cases = []
-          if root.tag == "testcase":
-              cases.append(root)
-          cases.extend(root.findall(".//testcase"))
+  deepeval:
+    name: DeepEval OpenRouter
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Require OpenRouter credentials
+        run: |
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            echo "ERROR: repository secret OPENROUTER_API_KEY is required"
+            exit 1
+          fi
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run required DeepEval live tests
+        run: |
+          python -m pytest \
+            tests/platform/test_pv_f_deepeval_geval_smoke.py \
+            tests/platform/test_pv_f_deepeval_faithfulness_smoke.py \
+            tests/platform/test_pv_f_deepeval_hallucination_smoke.py \
+            tests/platform/test_pv_f_deepeval_answer_relevancy_smoke.py \
+            tests/platform/test_pv_f_deepeval_contextual_relevancy_smoke.py \
+            tests/platform/test_pv_f_deepeval_contextual_precision_smoke.py \
+            tests/platform/test_pv_f_deepeval_contextual_recall_smoke.py \
+            tests/platform/test_pv_f_deepeval_turn_relevancy_smoke.py \
+            tests/platform/test_pv_f_deepeval_tool_correctness_smoke.py \
+            tests/platform/test_pv_f1_deepeval_geval_through_runner.py \
+            tests/platform/test_pv_f2_deepeval_faithfulness_through_runner.py \
+            tests/platform/test_pv_f2_deepeval_hallucination_through_runner.py \
+            tests/platform/test_pv_f2_deepeval_answer_relevancy_through_runner.py \
+            tests/platform/test_pv_f2_deepeval_contextual_relevancy_through_runner.py \
+            tests/platform/test_pv_f2_deepeval_contextual_precision_through_runner.py \
+            tests/platform/test_pv_f2_deepeval_contextual_recall_through_runner.py \
+            tests/platform/test_pv_f3_deepeval_turn_relevancy_through_runner.py \
+            tests/platform/test_pv_f4_deepeval_tool_correctness_through_runner.py \
+            --override-ini="addopts=-p no:deepeval" \
+            -m live \
+            --tb=short \
+            --junitxml=live-deepeval.xml \
+            -ra
+      - name: Upload DeepEval JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-deepeval-junit
+          path: live-deepeval.xml
+          if-no-files-found: error
+      - name: Reject skipped or uncollected DeepEval tests
+        run: python .github/scripts/require_live_junit.py live-deepeval.xml --min-tests 18
 
-          tests = sum(int(suite.get("tests") or 0) for suite in suites)
-          skipped = sum(int(suite.get("skipped") or 0) for suite in suites)
-          if tests == 0:
-              tests = len(cases)
-          skipped = max(
-              skipped,
-              sum(1 for case in cases if case.find("skipped") is not None),
-          )
-          if tests < 1:
-              sys.exit("intended live test was not collected")
-          if skipped:
-              sys.exit("intended live test was skipped")
-          PY
+  playwright-mcp:
+    name: Playwright MCP
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Require npx
+        run: |
+          command -v npx >/dev/null || { echo "ERROR: npx is required"; exit 1; }
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run required Playwright MCP live tests
+        run: |
+          python -m pytest \
+            tests/platform/test_pv_playwright_mcp_smoke.py \
+            tests/platform/test_pv_playwright_mcp_tool_correctness_through_runner.py \
+            tests/platform/test_pv_playwright_mcp_execution_error.py \
+            tests/platform/test_pv_playwright_mcp_multistep_tool_order_through_runner.py \
+            tests/platform/test_pv_playwright_mcp_multistep_wrong_tool_order.py \
+            tests/platform/test_pv_playwright_mcp_multistep_final_state_mismatch.py \
+            --override-ini="addopts=-p no:deepeval" \
+            -m live \
+            --tb=short \
+            --junitxml=live-playwright.xml \
+            -ra
+      - name: Upload Playwright JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-playwright-junit
+          path: live-playwright.xml
+          if-no-files-found: error
+      - name: Reject skipped or uncollected Playwright tests
+        run: python .github/scripts/require_live_junit.py live-playwright.xml --min-tests 6
+
+  langfuse-agent:
+    name: Langfuse agent spike (opt-in)
+    if: ${{ github.event.inputs.run_langfuse_agent == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Require Langfuse and OpenRouter credentials
+        run: |
+          missing=0
+          for name in LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY LANGFUSE_BASE_URL OPENROUTER_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: repository secret ${name} is required"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run Langfuse agent live tests
+        run: |
+          python -m pytest \
+            tests/platform/test_pv_langfuse_tool_correctness_through_runner.py \
+            --override-ini="addopts=-p no:deepeval" \
+            -m live \
+            --tb=short \
+            --junitxml=live-langfuse-agent.xml \
+            -ra
+      - name: Upload Langfuse agent JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-langfuse-agent-junit
+          path: live-langfuse-agent.xml
+          if-no-files-found: error
+      - name: Reject skipped or uncollected Langfuse agent tests
+        run: python .github/scripts/require_live_junit.py live-langfuse-agent.xml --min-tests 5
+
+  langfuse-chatbot:
+    name: Langfuse chatbot (opt-in)
+    if: ${{ github.event.inputs.run_langfuse_chatbot == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      CHAT_BASE_URL: ${{ secrets.CHAT_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Require Langfuse, OpenRouter, and chatbot URL
+        run: |
+          missing=0
+          for name in LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY LANGFUSE_BASE_URL OPENROUTER_API_KEY CHAT_BASE_URL; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: repository secret ${name} is required for the chatbot job"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run Langfuse chatbot live tests
+        run: |
+          python -m pytest \
+            tests/platform/test_pv_langfuse_user_feedback_geval_through_runner.py \
+            tests/platform/test_pv_langfuse_user_feedback_turn_relevancy_through_runner.py \
+            --override-ini="addopts=-p no:deepeval" \
+            -m live \
+            --tb=short \
+            --junitxml=live-langfuse-chatbot.xml \
+            -ra
+      - name: Upload Langfuse chatbot JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-langfuse-chatbot-junit
+          path: live-langfuse-chatbot.xml
+          if-no-files-found: error
+      - name: Reject skipped or uncollected Langfuse chatbot tests
+        run: python .github/scripts/require_live_junit.py live-langfuse-chatbot.xml --min-tests 2
