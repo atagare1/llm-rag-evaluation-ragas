@@ -30,6 +30,7 @@ from pathlib import Path
 import pytest
 from deepeval.metrics.tool_correctness.tool_correctness import ToolCorrectnessMetric
 from deepeval.test_case import ToolCallParams
+from deepeval_live import live_deepeval_local_model
 from dotenv import load_dotenv
 
 from ai_qe_eval.capture.langfuse_trace import (
@@ -141,7 +142,7 @@ def _order_evaluator() -> DeepEvalToolCorrectnessEvaluator:
         evaluation_params=[],
         include_reason=True,
         async_mode=False,
-        model=None,
+        model=live_deepeval_local_model(),
     )
     return DeepEvalToolCorrectnessEvaluator(
         tool_correctness_metric=metric,
@@ -156,7 +157,7 @@ def _input_parameters_evaluator() -> DeepEvalToolCorrectnessEvaluator:
         evaluation_params=[ToolCallParams.INPUT_PARAMETERS],
         include_reason=True,
         async_mode=False,
-        model=None,
+        model=live_deepeval_local_model(),
     )
     return DeepEvalToolCorrectnessEvaluator(
         tool_correctness_metric=metric,
