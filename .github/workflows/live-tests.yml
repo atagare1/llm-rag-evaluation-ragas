@@ -235,7 +235,11 @@ jobs:
           done
           exit "${missing}"
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -r spikes/langfuse_openai_agents/requirements.txt
+      - name: Require OpenInference OpenAI Agents instrumentor
+        run: python -c "from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor"
       - name: Run Langfuse agent live tests
         run: |
           python -m pytest \

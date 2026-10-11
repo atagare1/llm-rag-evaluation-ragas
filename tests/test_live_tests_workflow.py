@@ -61,6 +61,20 @@ def test_live_tests_workflow_preserves_core_providers_and_junit_gates():
         assert xml_name in text
 
 
+def test_live_tests_workflow_installs_agent_spike_openinference():
+    text = _workflow_text()
+    agent = text[text.index("  langfuse-agent:") : text.index("  langfuse-chatbot:")]
+    assert "spikes/langfuse_openai_agents/requirements.txt" in agent
+    assert (
+        "from openinference.instrumentation.openai_agents import "
+        "OpenAIAgentsInstrumentor"
+    ) in agent
+    ragas = text[text.index("  ragas:") : text.index("  deepeval:")]
+    chatbot = text[text.index("  langfuse-chatbot:") :]
+    assert "spikes/langfuse_openai_agents/requirements.txt" not in ragas
+    assert "spikes/langfuse_openai_agents/requirements.txt" not in chatbot
+
+
 def test_live_tests_workflow_starts_pinned_official_chatbot_locally():
     text = _workflow_text()
     assert f"LANGFUSE_EXAMPLES_SHA: {PINNED_LANGFUSE_EXAMPLES_SHA}" in text
